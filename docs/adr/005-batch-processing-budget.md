@@ -1,8 +1,9 @@
 # ADR-005: Batch Processing and Budget Management
 
-**Status**: Accepted
+**Status**: Superseded by ADR-021
 **Date**: 2025-01-26
 **Deciders**: Project team
+**Superseded by**: [ADR-021: Remove Internal Budget Management System](021-remove-internal-budget-management.md)
 
 ## Context
 

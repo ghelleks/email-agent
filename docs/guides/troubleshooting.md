@@ -10,7 +10,7 @@ Before diving into specific issues, try these general diagnostic steps:
 2. **Enable debug mode**: Set `DEBUG=true` in Script Properties for detailed logging
 3. **Try dry run mode**: Set `DRY_RUN=true` to test without making changes
 4. **Verify configuration**: Check all Script Properties are spelled correctly
-5. **Check API quota**: Ensure `DAILY_GEMINI_BUDGET` hasn't been exceeded
+5. **Check API quota**: Monitor usage at Google Cloud Console: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 
 ## Core Email Labeling Issues
 
@@ -194,11 +194,10 @@ npm run deploy:personal
 WEBAPP_MAX_EMAILS_PER_SUMMARY = 10
 ```
 
-**Solution**: Check that `DAILY_GEMINI_BUDGET` hasn't been exceeded:
+**Solution**: Check API quota usage at Google Cloud Console:
 ```
-DEBUG = true
+https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 ```
-Look for budget-related messages in logs.
 
 **Solution**: Try processing fewer emails at once (unlabel some emails, process in batches)
 
@@ -270,7 +269,7 @@ SUMMARIZER_DEBUG = true
 SUMMARIZER_MAX_EMAILS_PER_SUMMARY = 25
 ```
 
-**Solution**: Check that `DAILY_GEMINI_BUDGET` hasn't been exceeded
+**Solution**: Check API quota usage at Google Cloud Console
 
 **Solution**: Enable debug mode and check execution logs:
 ```
@@ -568,9 +567,9 @@ KNOWLEDGE_DEBUG = true
 
 **Solutions**:
 
-**Solution 1**: Reduce daily budget temporarily:
+**Solution 1**: Monitor quota usage at Google Cloud Console:
 ```
-DAILY_GEMINI_BUDGET = 25
+https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 ```
 
 **Solution 2**: Reduce emails processed per run:
@@ -580,9 +579,11 @@ MAX_EMAILS_PER_RUN = 10
 
 **Solution 3**: Wait 24 hours for quota to reset
 
-**Solution 4**: Check Google Cloud Console for API quota limits
+**Solution 4**: Request quota increase through Google Cloud Console if needed
 
 **Solution 5**: For multi-account, use separate API keys per account for better quota isolation
+
+**Solution 6**: Consider upgrading to a paid API tier for higher quotas
 
 ## Getting Help
 

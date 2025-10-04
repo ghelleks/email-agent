@@ -50,15 +50,6 @@ function summarizeEmails() {
       };
     }
 
-    // Security: Rate limiting check
-    if (!enforceBudget_(1, cfg.DAILY_GEMINI_BUDGET)) {
-      console.log(`Rate limit exceeded for user: ${userEmail}`);
-      return {
-        success: false,
-        error: 'Daily AI budget exceeded. Please try again tomorrow.'
-      };
-    }
-
     // Step 1: Find emails with summarize label using GmailService
     const emailDiscovery = findEmailsWithSummarizeLabel_();
     if (!emailDiscovery.success) {

@@ -93,11 +93,6 @@ var Agents = (function() {
         continue;
       }
 
-      if (runCountThisExecution >= budget) {
-        results.push({ agent: item.name, status: 'skip', info: 'budget-exceeded' });
-        continue;
-      }
-
       var runWhen = item.options && item.options.runWhen || 'afterLabel';
       var shouldSkipForDryRun = ctx.dryRun && runWhen !== 'always' && (cfg.AGENTS_DRY_RUN !== false);
       if (shouldSkipForDryRun) {

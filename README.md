@@ -281,7 +281,6 @@ All settings are optional and have sensible defaults. Configure via Script Prope
 | `DRY_RUN` | `false` | Test mode (analyze but don't apply labels) |
 | `DEBUG` | `false` | Verbose logging for troubleshooting |
 | `MAX_EMAILS_PER_RUN` | `20` | Maximum emails to process each run |
-| `BUDGET_HISTORY_DAYS` | `3` | Days to retain budget tracking properties |
 
 **For complete configuration reference**: See [Configuration Guide](docs/guides/configuration.md)
 
@@ -306,7 +305,7 @@ The system runs entirely in Google's cloud using **Google Apps Script**:
 2. **Finds unlabeled emails** in your Gmail inbox
 3. **Sends email content** to Gemini AI for classification
 4. **Applies appropriate labels** based on AI analysis
-5. **Budget tracking** prevents API quota overruns
+5. **Native quota management** via Google Cloud Console and Apps Script limits
 
 ### Why Google Apps Script?
 

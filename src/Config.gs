@@ -10,7 +10,6 @@ function getConfig_() {
     MAX_EMAILS_PER_RUN: parseInt(p.getProperty('MAX_EMAILS_PER_RUN') || '20', 10),
     BATCH_SIZE: parseInt(p.getProperty('BATCH_SIZE') || '10', 10),
     BODY_CHARS: parseInt(p.getProperty('BODY_CHARS') || '1200', 10),
-    DAILY_GEMINI_BUDGET: parseInt(p.getProperty('DAILY_GEMINI_BUDGET') || '50', 10),
     DRY_RUN: (p.getProperty('DRY_RUN') || 'false').toLowerCase() === 'true',
     DEBUG: (p.getProperty('DEBUG') || 'false').toLowerCase() === 'true',
     MODEL_PRIMARY: 'gemini-2.5-flash',
@@ -39,9 +38,7 @@ function getConfig_() {
     KNOWLEDGE_LOG_SIZE_WARNINGS: (p.getProperty('KNOWLEDGE_LOG_SIZE_WARNINGS') || 'true').toLowerCase() === 'true',
     // KnowledgeService Test Configuration
     TEST_DOC_URL: p.getProperty('TEST_DOC_URL'),
-    TEST_FOLDER_URL: p.getProperty('TEST_FOLDER_URL'),
-    // Budget History Configuration
-    BUDGET_HISTORY_DAYS: parseInt(p.getProperty('BUDGET_HISTORY_DAYS') || '3', 10)
+    TEST_FOLDER_URL: p.getProperty('TEST_FOLDER_URL')
   };
 }
 
@@ -49,67 +46,4 @@ function ensureLabels_() {
   ['reply_needed','review','todo','summarize'].forEach(function(name) {
     if (!GmailApp.getUserLabelByName(name)) GmailApp.createLabel(name);
   });
-}
-
-/**
- * Clean up old budget properties to prevent property accumulation
- * Removes date-based budget properties older than BUDGET_HISTORY_DAYS (default: 3 days)
- * Budget properties follow the format: BUDGET-YYYY-MM-DD
- *
- * @param {Object} cfg - Configuration object from getConfig_()
- * @returns {Object} - Cleanup summary with counts of deleted and retained properties
- */
-function cleanupOldBudgetProperties_(cfg) {
-  const props = PropertiesService.getScriptProperties();
-  const allProps = props.getProperties();
-  const retentionDays = cfg.BUDGET_HISTORY_DAYS;
-
-  // Calculate cutoff date
-  const now = new Date();
-  const cutoffDate = new Date(now.getTime() - (retentionDays * 24 * 60 * 60 * 1000));
-
-  let deletedCount = 0;
-  let retainedCount = 0;
-  const deletedKeys = [];
-
-  // Pattern to match budget properties: BUDGET-YYYY-MM-DD
-  const budgetPattern = /^BUDGET-(\d{4})-(\d{2})-(\d{2})$/;
-
-  Object.keys(allProps).forEach(function(key) {
-    const match = key.match(budgetPattern);
-    if (match) {
-      // Parse date from property key
-      const year = parseInt(match[1], 10);
-      const month = parseInt(match[2], 10) - 1; // JavaScript months are 0-indexed
-      const day = parseInt(match[3], 10);
-      const propDate = new Date(year, month, day);
-
-      // Delete if older than cutoff
-      if (propDate < cutoffDate) {
-        props.deleteProperty(key);
-        deletedKeys.push(key);
-        deletedCount++;
-        if (cfg.DEBUG) {
-          console.log('Deleted old budget property: ' + key + ' (date: ' + propDate.toISOString().split('T')[0] + ')');
-        }
-      } else {
-        retainedCount++;
-      }
-    }
-  });
-
-  const summary = {
-    deleted: deletedCount,
-    retained: retainedCount,
-    retentionDays: retentionDays,
-    cutoffDate: cutoffDate.toISOString().split('T')[0]
-  };
-
-  if (cfg.DEBUG && deletedCount > 0) {
-    console.log('Budget cleanup summary: ' + JSON.stringify(summary, null, 2));
-  } else if (deletedCount > 0) {
-    console.log('Cleaned up ' + deletedCount + ' old budget properties (retained ' + retainedCount + ' recent)');
-  }
-
-  return summary;
 }

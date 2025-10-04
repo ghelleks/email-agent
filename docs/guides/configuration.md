@@ -38,15 +38,13 @@ These settings control the main email labeling functionality.
 | `MAX_EMAILS_PER_RUN` | `20` | Maximum emails to process in one execution |
 | `BATCH_SIZE` | `10` | Number of emails sent to AI in one request |
 | `BODY_CHARS` | `1200` | Characters of email body to analyze |
-| `DAILY_GEMINI_BUDGET` | `50` | Maximum AI API calls per day |
-| `BUDGET_HISTORY_DAYS` | `3` | Days to retain budget tracking properties before cleanup |
 
 **When to adjust**:
 - Increase `MAX_EMAILS_PER_RUN` if you get many emails daily
 - Decrease `BATCH_SIZE` if experiencing timeouts
 - Increase `BODY_CHARS` if classification seems inaccurate
-- Adjust `DAILY_GEMINI_BUDGET` based on your API quota
-- Adjust `BUDGET_HISTORY_DAYS` to control Script Properties accumulation (lower = more aggressive cleanup)
+
+**Quota Management**: API quotas are managed natively through Google Cloud Console. Monitor usage at: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 
 ### Behavior Settings
 
@@ -70,8 +68,8 @@ BATCH_SIZE = 10
 GEMINI_API_KEY = AIzaSyC-abc123...
 MAX_EMAILS_PER_RUN = 50
 BATCH_SIZE = 20
-DAILY_GEMINI_BUDGET = 100
 ```
+Note: Monitor API quotas through Google Cloud Console and request increases if needed.
 
 **Testing/debugging**:
 ```
@@ -318,20 +316,21 @@ WEBAPP_ENABLED = true
 
 ### Scenario 4: High Volume Inbox
 
-**Goal**: Process many emails with higher quotas.
+**Goal**: Process many emails efficiently.
 
 ```
 # Core
 GEMINI_API_KEY = AIzaSyC-abc123...
 MAX_EMAILS_PER_RUN = 50
 BATCH_SIZE = 20
-DAILY_GEMINI_BUDGET = 100
 
 # Email Summarizer
 SUMMARIZER_ENABLED = true
 SUMMARIZER_MAX_EMAILS_PER_SUMMARY = 100
 SUMMARIZER_MAX_AGE_DAYS = 14
 ```
+
+**Note**: Monitor API quotas at Google Cloud Console and request increases if needed.
 
 ### Scenario 5: Custom Classification with Knowledge System
 
@@ -538,11 +537,10 @@ Quick reference table of all default values:
 | `MAX_EMAILS_PER_RUN` | `20` | `SUMMARIZER_MAX_AGE_DAYS` | `7` |
 | `BATCH_SIZE` | `10` | `SUMMARIZER_MAX_EMAILS_PER_SUMMARY` | `50` |
 | `BODY_CHARS` | `1200` | `SUMMARIZER_ARCHIVE_ON_LABEL` | `true` |
-| `DAILY_GEMINI_BUDGET` | `50` | `SUMMARIZER_ENABLED` | `true` |
-| `BUDGET_HISTORY_DAYS` | `3` | `SUMMARIZER_DEBUG` | `false` |
-| `DEFAULT_FALLBACK_LABEL` | `review` | `SUMMARIZER_DRY_RUN` | `false` |
-| `DRY_RUN` | `false` | `WEBAPP_ENABLED` | `true` |
-| `DEBUG` | `false` | `WEBAPP_MAX_EMAILS_PER_SUMMARY` | `50` |
+| `DEFAULT_FALLBACK_LABEL` | `review` | `SUMMARIZER_ENABLED` | `true` |
+| `DRY_RUN` | `false` | `SUMMARIZER_DEBUG` | `false` |
+| `DEBUG` | `false` | `SUMMARIZER_DRY_RUN` | `false` |
+| `WEBAPP_ENABLED` | `true` | `WEBAPP_MAX_EMAILS_PER_SUMMARY` | `50` |
 | `REPLY_DRAFTER_ENABLED` | `true` | `REPLY_DRAFTER_KNOWLEDGE_MAX_DOCS` | `5` |
 | `REPLY_DRAFTER_DEBUG` | `false` | `REPLY_DRAFTER_DRY_RUN` | `false` |
 | `KNOWLEDGE_CACHE_DURATION_MINUTES` | `30` | `LABEL_KNOWLEDGE_MAX_DOCS` | `5` |

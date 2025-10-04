@@ -286,10 +286,11 @@ If you regularly process many emails:
 For power users who want to adjust processing limits:
 
 ```javascript
-// In Script Properties, adjust these values:
+// In Script Properties, adjust this value:
 WEBAPP_MAX_EMAILS_PER_SUMMARY = 50  // Process up to 50 emails (may cause timeouts)
-DAILY_GEMINI_BUDGET = 100           // Allow 100 AI calls per day
 ```
+
+**Note**: API quotas are managed natively through Google Cloud Console. Monitor usage at: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 
 ### Integration with Existing Workflows
 The web app works alongside the existing automatic labeling:

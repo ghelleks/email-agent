@@ -37,14 +37,26 @@ function categorizeBatch_(prompt, model, projectId, location, apiKey) {
   let json = {};
   try { json = JSON.parse(res.getContentText()); } catch (e) { json = {}; }
 
-  // Check for token limit errors and provide actionable error message
+  // Check for errors and provide actionable error messages
   if (json.error && json.error.message) {
     const errorMsg = json.error.message;
+    const responseCode = res.getResponseCode();
+
+    // Token limit errors
     if (errorMsg.includes('token limit') || errorMsg.includes('context length') || errorMsg.includes('exceeded maximum')) {
       throw new Error(
         'Gemini API token limit exceeded. ' +
         'Your knowledge documents and emails exceeded the model\'s 1M token capacity. ' +
         'Try reducing LABEL_KNOWLEDGE_MAX_DOCS or processing fewer emails. ' +
+        'Original error: ' + errorMsg
+      );
+    }
+
+    // Quota/rate limit errors
+    if (responseCode === 429 || errorMsg.includes('quota') || errorMsg.includes('rate limit') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+      throw new Error(
+        'Google API quota exceeded. You have hit the rate limits or quota for the Gemini API. ' +
+        'Check your quota and increase limits at: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas ' +
         'Original error: ' + errorMsg
       );
     }
@@ -86,19 +98,6 @@ function extractFirstJson_(txt) {
   return JSON.parse(m[0]);
 }
 
-function enforceBudget_(nCalls, dailyLimit) {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const key = 'BUDGET-' + year + '-' + month + '-' + day;
-  const props = PropertiesService.getScriptProperties();
-  const cur = parseInt(props.getProperty(key) || '0', 10);
-  if (cur + nCalls > dailyLimit) return false;
-  props.setProperty(key, String(cur + nCalls));
-  return true;
-}
-
 /**
  * Phase 3: AI Summarization - Web App Service Extension
  * Added for Interactive Web App Agent
@@ -128,14 +127,6 @@ function generateConsolidatedSummary_(prompt, config) {
     const apiKey = cfg.GEMINI_API_KEY;
     const projectId = cfg.PROJECT_ID;
     const location = cfg.LOCATION;
-
-    // Check budget
-    if (!enforceBudget_(1, cfg.DAILY_GEMINI_BUDGET)) {
-      return {
-        success: false,
-        error: 'Daily AI budget exceeded. Please try again tomorrow.'
-      };
-    }
 
     // Prepare API request using existing patterns
     const payload = {
@@ -180,11 +171,21 @@ function generateConsolidatedSummary_(prompt, config) {
       };
     }
 
-    if (response.getResponseCode() !== 200) {
+    const responseCode = response.getResponseCode();
+    if (responseCode !== 200) {
       Logger.log('LLM API error: ' + responseText);
+
+      // Handle quota/rate limit errors
+      if (responseCode === 429 || responseText.includes('quota') || responseText.includes('rate limit') || responseText.includes('RESOURCE_EXHAUSTED')) {
+        return {
+          success: false,
+          error: 'Google API quota exceeded. You have hit the rate limits or quota for the Gemini API. Check your quota and increase limits at: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas'
+        };
+      }
+
       return {
         success: false,
-        error: `AI service error: ${response.getResponseCode()}`
+        error: `AI service error: ${responseCode}`
       };
     }
 
@@ -233,14 +234,10 @@ function generateConsolidatedSummary_(prompt, config) {
  * @param {string} location - Google Cloud location (for Vertex AI)
  * @param {string} apiKey - Gemini API key (for API key auth)
  * @returns {string} Draft reply text
- * @throws {Error} If API call fails or budget exceeded
+ * @throws {Error} If API call fails
  */
 function generateReplyDraft_(prompt, model, projectId, location, apiKey) {
-  // Check budget
   const cfg = getConfig_();
-  if (!enforceBudget_(1, cfg.DAILY_GEMINI_BUDGET)) {
-    throw new Error('Daily AI budget exceeded for reply drafting. Please try again tomorrow.');
-  }
 
   // Build API request
   const payload = {
@@ -278,6 +275,15 @@ function generateReplyDraft_(prompt, model, projectId, location, apiKey) {
         'Gemini API token limit exceeded. ' +
         'Your knowledge documents and email thread exceeded the model\'s capacity. ' +
         'Try reducing REPLY_DRAFTER_CONTEXT_MAX_DOCS or simplifying instructions. ' +
+        'Original error: ' + errorText
+      );
+    }
+
+    // Handle quota/rate limit errors
+    if (responseCode === 429 || errorText.includes('quota') || errorText.includes('rate limit') || errorText.includes('RESOURCE_EXHAUSTED')) {
+      throw new Error(
+        'Google API quota exceeded. You have hit the rate limits or quota for the Gemini API. ' +
+        'Check your quota and increase limits at: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas ' +
         'Original error: ' + errorText
       );
     }

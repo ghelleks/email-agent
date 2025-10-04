@@ -129,12 +129,11 @@ The `deploy:[account]` commands attempt automated trigger installation but may f
 - **AgentTemplate.gs**: Enhanced agent template demonstrating self-contained patterns
 
 ### Data Flow
-1. `cleanupOldBudgetProperties_()` removes old budget tracking properties (runs first, prevents accumulation)
-2. `findUnprocessed_()` identifies unlabeled email threads
-3. `minimalize_()` extracts relevant content within character limits
-4. `categorizeWithGemini_()` sends emails to AI for classification
-5. `Organizer.apply_()` applies labels based on AI results
-6. Budget tracking prevents API quota overruns
+1. `findUnprocessed_()` identifies unlabeled email threads
+2. `minimalize_()` extracts relevant content within character limits
+3. `categorizeWithGemini_()` sends emails to AI for classification
+4. `Organizer.apply_()` applies labels based on AI results
+5. Native Google API quota management prevents overruns (monitor at Google Cloud Console)
 
 ### Configuration System
 Configuration uses Apps Script Script Properties accessible via the Apps Script editor:
@@ -146,8 +145,6 @@ Configuration uses Apps Script Script Properties accessible via the Apps Script 
 - `DEBUG`: Enables verbose logging
 - `MAX_EMAILS_PER_RUN`: Limits emails processed per execution (default: 20)
 - `BATCH_SIZE`: Number of emails sent to AI in one request (default: 10)
-- `DAILY_GEMINI_BUDGET`: Daily API call limit (default: 50)
-- `BUDGET_HISTORY_DAYS`: Number of days to retain budget tracking properties (default: 3)
 
 #### Web App Configuration
 - `WEBAPP_ENABLED`: Enable/disable web app functionality (default: true)
@@ -523,7 +520,7 @@ Self-contained agents may create and manage additional labels:
 ### Error Handling
 - All configuration errors should be descriptive and actionable
 - Use `cfg.DEBUG` for detailed logging during development
-- Budget tracking prevents quota overruns with graceful degradation
+- Quota management handled by Google Cloud Console (see monitoring section below)
 
 ### Google Drive Integration
 
@@ -543,12 +540,13 @@ Refer to `docs/adr/` for complete context:
 - **ADR-002**: Gemini API integration with dual authentication modes
 - **ADR-003**: Four-label classification system for simplicity
 - **ADR-004**: Pluggable agent architecture for extensibility
-- **ADR-005**: Batch processing with budget management
+- **ADR-005**: Batch processing with budget management (superseded by ADR-021 - native quota management)
 - **ADR-006**: Support for both API key and Vertex AI authentication
 - **ADR-007**: Google Drive document integration for classification rules
 - **ADR-011**: Self-contained agent architecture for independent modules
 - **ADR-012**: Generic service layer pattern for reusable agent operations
 - **ADR-019**: Global knowledge folder for organization-wide context shared across all AI features
+- **ADR-021**: Removed internal budget system - quota management via Google Cloud Console
 
 ## Testing and Debugging
 
@@ -560,7 +558,7 @@ Refer to `docs/adr/` for complete context:
 
 ### Monitoring
 - Check execution logs via `npm run logs:[account]` or Apps Script editor
-- Monitor daily budget usage to prevent quota overruns
+- Monitor API quotas at Google Cloud Console: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 - Verify label application in Gmail after test runs
 
 ### Common Debugging Steps
@@ -638,9 +636,8 @@ Refer to `docs/adr/` for complete context:
 - **Solution**: Enable `REPLY_DRAFTER_DEBUG=true` to see token utilization and knowledge loading
 - **Solution**: Review generated drafts and refine instructions document based on patterns
 
-**🔍 Problem**: Script Properties accumulating too many budget entries
-- **Solution**: Budget cleanup runs automatically every execution cycle
-- **Solution**: Adjust `BUDGET_HISTORY_DAYS` to control retention (default: 3 days)
-- **Solution**: Lower values clean up more aggressively, higher values retain more history
-- **Solution**: Enable `DEBUG=true` to see cleanup logs showing what was deleted
-- **Note**: Old budget properties (format: `BUDGET-YYYY-MM-DD`) are automatically removed after the retention period
+**🔍 Problem**: API quota exceeded
+- **Solution**: Monitor quota usage at Google Cloud Console: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
+- **Solution**: Request quota increase through Google Cloud Console if needed
+- **Solution**: Reduce `MAX_EMAILS_PER_RUN` to process fewer emails per execution
+- **Solution**: Consider upgrading to a paid API tier for higher quotas
