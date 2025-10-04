@@ -167,6 +167,131 @@ function generateSummaryFromEmails_(emails) {
   }
 }
 
+// ============================================================================
+// Prompt Building (Agent-Owned - ADR-022)
+// ============================================================================
+
+/**
+ * Build consolidated summary prompt for multiple emails
+ * Agent-owned prompt builder (ADR-022: Agents own their prompts)
+ * @param {Array} emailContents - Array of email objects with subject, from, date, body
+ * @param {Object} knowledge - Knowledge object from KnowledgeService (optional)
+ * @param {Object} config - Configuration object with emailLinks, includeWebLinks
+ * @param {Object} globalKnowledge - Global knowledge object from KnowledgeService (optional)
+ * @returns {string} - Formatted prompt for AI summarization
+ */
+function buildSummaryPrompt_(emailContents, knowledge, config, globalKnowledge) {
+  // Build email reference mapping with subjects and Gmail URLs for the AI
+  let emailReferenceMap = 'EMAIL REFERENCE MAP:\n';
+  for (let i = 0; i < emailContents.length; i++) {
+    const email = emailContents[i];
+    // Find the corresponding Gmail URL from the emailLinks config
+    const correspondingLink = config.emailLinks ? config.emailLinks.find(link => link.subject === email.subject) : null;
+    const gmailUrl = correspondingLink ? correspondingLink.url : `https://mail.google.com/mail/u/0/#inbox/${email.id}`;
+    emailReferenceMap += `Email ${i + 1}: Subject="${email.subject}" URL=${gmailUrl}\n`;
+  }
+
+  // Combine all email content for single AI request
+  let combinedContent = `EMAILS TO SUMMARIZE (${emailContents.length} total):\n\n`;
+
+  for (let i = 0; i < emailContents.length; i++) {
+    const email = emailContents[i];
+    combinedContent += `--- EMAIL ${i + 1} ---\n`;
+    combinedContent += `From: ${email.from}\n`;
+    combinedContent += `Subject: ${email.subject}\n`;
+    combinedContent += `Date: ${email.date}\n`;
+    combinedContent += `Content: ${email.body.substring(0, 1200)}\n\n`;
+  }
+
+  // Build web links section if provided - these will be included inline by the AI
+  let webLinksSection = '';
+  if (config.includeWebLinks && config.includeWebLinks.length > 0) {
+    webLinksSection = '\n\nWEB LINKS FOUND IN EMAILS (include these inline in relevant themes):\n' + config.includeWebLinks.join('\n');
+  }
+
+  // Build the main prompt
+  const promptParts = [
+    `Please create a consolidated summary of these ${emailContents.length} emails in the style of "The Economist's World in Brief" - concise, direct, and informative.`
+  ];
+
+  // GLOBAL KNOWLEDGE INJECTION (applies to ALL prompts)
+  if (globalKnowledge && globalKnowledge.configured) {
+    promptParts.push('');
+    promptParts.push('=== GLOBAL KNOWLEDGE ===');
+    promptParts.push(globalKnowledge.knowledge);
+
+    // Token utilization logging (when SUMMARIZER_DEBUG or DEBUG enabled)
+    if (globalKnowledge.metadata && globalKnowledge.metadata.utilizationPercent) {
+      const cfg = getConfig_();
+      const summarizerCfg = getSummarizerConfig_();
+      if (cfg.DEBUG || summarizerCfg.SUMMARIZER_DEBUG) {
+        Logger.log(JSON.stringify({
+          globalKnowledgeUtilization: globalKnowledge.metadata.utilizationPercent,
+          estimatedTokens: globalKnowledge.metadata.estimatedTokens,
+          modelLimit: globalKnowledge.metadata.modelLimit
+        }, null, 2));
+      }
+    }
+  }
+
+  // AGENT-SPECIFIC KNOWLEDGE INJECTION (summarization guidelines)
+  if (knowledge && knowledge.configured) {
+    promptParts.push('');
+    promptParts.push('=== SUMMARIZATION GUIDELINES ===');
+    promptParts.push(knowledge.knowledge);
+
+    // Token utilization logging (when SUMMARIZER_DEBUG enabled)
+    if (knowledge.metadata && knowledge.metadata.utilizationPercent) {
+      const summarizerCfg = getSummarizerConfig_();
+      if (summarizerCfg.SUMMARIZER_DEBUG) {
+        console.log(JSON.stringify({
+          summarizerKnowledgeUtilization: knowledge.metadata.utilizationPercent,
+          estimatedTokens: knowledge.metadata.estimatedTokens,
+          modelLimit: knowledge.metadata.modelLimit
+        }, null, 2));
+      }
+    }
+  }
+
+  promptParts.push('');
+  promptParts.push('REQUIREMENTS:');
+  promptParts.push('1. Create ONE unified summary covering all emails');
+  promptParts.push('2. Use **bold formatting** for important terms, people, places, and proper nouns');
+  promptParts.push('3. Use *italic formatting* for emphasis and context');
+  promptParts.push('4. Group related topics together intelligently with clear theme headlines');
+  promptParts.push('5. Keep the tone professional, authoritative, and concise');
+  promptParts.push('6. Include important web URLs as inline markdown links: [link text](URL)');
+  promptParts.push('7. Focus on key insights, decisions, and actionable information');
+  promptParts.push('8. Maximum length: 400 words');
+  promptParts.push('9. Structure each theme with a clear headline followed by content');
+  promptParts.push('10. Include context that helps understand the significance of information');
+  promptParts.push('');
+  promptParts.push('MARKDOWN FORMATTING REQUIREMENTS:');
+  promptParts.push('- Start each major theme with a clear headline (use ### format)');
+  promptParts.push('- Group related emails under the same theme when appropriate');
+  promptParts.push('- Include web URLs as proper markdown links: [descriptive text](URL) within sentences');
+  promptParts.push('- At the end of each theme section, create Gmail links for source emails using this format:');
+  promptParts.push('  **Sources:** [Email Subject 1](gmail_url_1), [Email Subject 2](gmail_url_2)');
+  promptParts.push('- Use the exact subject lines and Gmail URLs from the EMAIL REFERENCE MAP provided below');
+  promptParts.push("- If emails don't naturally group, create logical themes like \"Business Updates\", \"Project Status\", \"Action Items\", etc.");
+  promptParts.push('- Use standard markdown formatting throughout (bold, italic, links, headers)');
+  promptParts.push('');
+  promptParts.push('STYLE NOTES:');
+  promptParts.push('- Write like a seasoned journalist summarizing global events');
+  promptParts.push('- Be direct and factual, avoid unnecessary adjectives');
+  promptParts.push('- Use present tense where appropriate');
+  promptParts.push('- Prioritize information by importance and urgency');
+  promptParts.push('- Each theme should be self-contained with its relevant source attribution');
+  promptParts.push('');
+  promptParts.push(emailReferenceMap);
+  promptParts.push('');
+  promptParts.push(combinedContent + webLinksSection);
+  promptParts.push('');
+  promptParts.push('Please provide only the summary text using proper markdown formatting (bold, italic, links, headers). Do not include introductory phrases like "Here is a summary" - start directly with the content.');
+
+  return promptParts.join('\n');
+}
+
 // Note: Markdown conversion now handled by shared utility in Utility.gs
 // This eliminates 44 lines of duplicate code and standardizes markdown processing
 

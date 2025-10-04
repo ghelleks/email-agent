@@ -485,6 +485,147 @@ const archived = archiveEmailsByIds_(emailIds);
 const sent = sendFormattedEmail_(destination, subject, htmlContent, sourceEmails);
 ```
 
+#### Prompt Building (ADR-022)
+
+**Agents that use AI must build their own prompts.** This ensures complete self-containment and independent evolution.
+
+**Standard Prompt Building Pattern:**
+
+All agent prompt builders follow this structure:
+1. Base agent instructions (built-in system prompts)
+2. Global knowledge injection (organizational context - ADR-019)
+3. Agent-specific knowledge injection (task instructions - ADR-015)
+4. Task data (emails, threads, content to process)
+
+**Example Agent Prompt Builder:**
+
+```javascript
+/**
+ * Build agent prompt with knowledge injection
+ * Agent-owned prompt builder (ADR-022)
+ * @private
+ * @param {Object} taskData - Data to process (email thread, emails, etc.)
+ * @param {Object} agentKnowledge - Agent-specific knowledge from KnowledgeService
+ * @param {Object} globalKnowledge - Global knowledge from KnowledgeService
+ * @returns {string} - Complete prompt for AI processing
+ */
+function buildAgentPrompt_(taskData, agentKnowledge, globalKnowledge) {
+  const parts = ['You are performing [agent task description].'];
+
+  // 1. GLOBAL KNOWLEDGE INJECTION (organizational context - ADR-019)
+  if (globalKnowledge && globalKnowledge.configured) {
+    parts.push('');
+    parts.push('=== GLOBAL KNOWLEDGE ===');
+    parts.push(globalKnowledge.knowledge);
+
+    // Optional: Token utilization logging
+    if (globalKnowledge.metadata && globalKnowledge.metadata.utilizationPercent) {
+      const cfg = getConfig_();
+      const agentCfg = getAgentConfig_();
+      if (cfg.DEBUG || agentCfg.AGENT_DEBUG) {
+        Logger.log(JSON.stringify({
+          globalKnowledgeUtilization: globalKnowledge.metadata.utilizationPercent,
+          estimatedTokens: globalKnowledge.metadata.estimatedTokens,
+          modelLimit: globalKnowledge.metadata.modelLimit
+        }, null, 2));
+      }
+    }
+  }
+
+  // 2. AGENT-SPECIFIC KNOWLEDGE INJECTION (task instructions - ADR-015)
+  if (agentKnowledge && agentKnowledge.configured) {
+    parts.push('');
+    parts.push('=== AGENT INSTRUCTIONS ===');
+    parts.push(agentKnowledge.knowledge);
+
+    // Optional: Token utilization logging
+    if (agentKnowledge.metadata && agentKnowledge.metadata.utilizationPercent) {
+      const agentCfg = getAgentConfig_();
+      if (agentCfg.AGENT_DEBUG) {
+        console.log(JSON.stringify({
+          agentKnowledgeUtilization: agentKnowledge.metadata.utilizationPercent,
+          estimatedTokens: agentKnowledge.metadata.estimatedTokens
+        }, null, 2));
+      }
+    }
+  } else {
+    // Fallback instructions when no knowledge configured
+    parts.push('');
+    parts.push('=== DEFAULT INSTRUCTIONS ===');
+    parts.push('- Use professional tone');
+    parts.push('- Be concise and actionable');
+  }
+
+  // 3. TASK DATA INJECTION
+  parts.push('');
+  parts.push('=== TASK DATA ===');
+  parts.push(formatTaskData_(taskData));
+
+  // 4. FINAL INSTRUCTIONS
+  parts.push('');
+  parts.push('=== OUTPUT INSTRUCTIONS ===');
+  parts.push('Please provide [expected output format].');
+
+  return parts.join('\n');
+}
+```
+
+**Integration with Agent Workflow:**
+
+```javascript
+function agentOnLabel_(ctx) {
+  const agentConfig = getAgentConfig_();
+
+  // 1. Fetch global knowledge (shared across ALL AI operations)
+  const cfg = getConfig_();
+  const globalKnowledge = fetchGlobalKnowledge_({
+    folderUrl: cfg.GLOBAL_KNOWLEDGE_FOLDER_URL,
+    maxDocs: parseInt(cfg.GLOBAL_KNOWLEDGE_MAX_DOCS || '5')
+  });
+
+  // 2. Fetch agent-specific knowledge
+  const agentKnowledge = fetchAgentKnowledge_({
+    instructionsUrl: agentConfig.AGENT_INSTRUCTIONS_URL,
+    knowledgeFolderUrl: agentConfig.AGENT_KNOWLEDGE_FOLDER_URL,
+    maxDocs: agentConfig.AGENT_KNOWLEDGE_MAX_DOCS
+  });
+
+  // 3. Build prompt using agent-owned function
+  const prompt = buildAgentPrompt_(ctx.thread, agentKnowledge, globalKnowledge);
+
+  // 4. Call LLM service with pre-built prompt
+  const result = generateAgentOutput_(
+    prompt,
+    cfg.MODEL_PRIMARY,
+    cfg.PROJECT_ID,
+    cfg.LOCATION,
+    cfg.GEMINI_API_KEY
+  );
+
+  // 5. Process result and return status
+  return { status: 'ok', info: 'processed successfully' };
+}
+```
+
+**Key Points:**
+
+- **Agent owns the prompt**: Prompt builder lives in agent file (e.g., `buildReplyDraftPrompt_()` in `AgentReplyDrafter.gs`)
+- **Knowledge injection order matters**: Always global → agent-specific → task data
+- **Use KnowledgeService**: Fetch knowledge using `fetchGlobalKnowledge_()` and agent-specific fetch functions
+- **Token transparency**: Log utilization when debug mode enabled
+- **Graceful degradation**: Provide fallback instructions when knowledge not configured
+
+**Why Agents Own Their Prompts:**
+- **Complete self-containment**: Agent manages config + labels + prompts + logic
+- **Independent evolution**: Change prompts without touching core system
+- **Clear ownership**: Agent file is single source of truth
+- **Simpler core**: `PromptBuilder.gs` only contains core classification prompt
+
+**Examples:**
+- **Core**: `buildCategorizePrompt_()` in `PromptBuilder.gs` (email classification)
+- **Reply Drafter**: `buildReplyDraftPrompt_()` in `AgentReplyDrafter.gs`
+- **Email Summarizer**: `buildSummaryPrompt_()` in `AgentSummarizer.gs`
+
 ### Hook Selection Guide
 
 **When to implement onLabel:**
