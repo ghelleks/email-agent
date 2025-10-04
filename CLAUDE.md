@@ -178,6 +178,22 @@ This dual-hook architecture ensures drafts are created for both newly-classified
 - `SUMMARIZER_DEBUG`: Enable detailed logging for the agent (default: false)
 - `SUMMARIZER_DRY_RUN`: Test mode for the agent (default: false)
 
+#### Todo Forwarder Agent Configuration
+**Note**: Todo Forwarder configuration is managed in `AgentTodoForwarder.gs` via `getTodoForwarderConfig_()` function, following the self-contained architecture pattern.
+
+The Todo Forwarder uses the **dual-hook pattern** to ensure comprehensive forwarding coverage:
+1. **onLabel Hook**: Runs during email classification (immediate forwarding for newly-classified emails)
+2. **postLabel Hook**: Runs after labeling complete (catches manually-labeled `todo` emails)
+
+This dual-hook architecture ensures todos are forwarded for both newly-classified emails and manually-labeled emails, all within the hourly email processing cycle. **No separate trigger required.**
+
+- `TODO_FORWARDER_ENABLED`: Enable/disable Todo Forwarder agent (default: true)
+- `TODO_FORWARDER_EMAIL`: Email address to forward todos to (required - agent disabled if not set)
+- `TODO_FORWARDER_REMOVE_TODO_LABEL`: Remove 'todo' label after forwarding (default: true)
+- `TODO_FORWARDER_ARCHIVE_AFTER_FORWARD`: Archive email after forwarding (default: false)
+- `TODO_FORWARDER_DEBUG`: Enable detailed logging for the agent (default: false)
+- `TODO_FORWARDER_DRY_RUN`: Test mode for the agent (default: false)
+
 #### KnowledgeService Configuration
 The KnowledgeService provides unified knowledge management for AI prompts by fetching Google Drive documents.
 

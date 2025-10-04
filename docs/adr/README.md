@@ -40,6 +40,7 @@ All ADRs in this project follow a consistent format defined in [template.md](tem
 - [ADR-017: Remove UserProperties-Based Agent Idempotency](017-remove-userproperties-idempotency.md)
 - [ADR-018: Dual-Hook Agent Architecture](018-dual-hook-agent-architecture.md) ⚠️ Breaking Change
 - [ADR-019: Global Knowledge Folder Architecture](019-global-knowledge-folder.md)
+- [ADR-020: Todo Forwarder Agent Implementation](020-todo-forwarder-agent.md)
 
 ## Status Legend
 
