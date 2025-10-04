@@ -118,14 +118,14 @@ The `deploy:[account]` commands attempt automated trigger installation but may f
 - **Organizer.gs**: Applies categorization results and manages Gmail labels
 - **LLMService.gs**: Handles Gemini AI integration with dual authentication (API key or Vertex AI)
 - **KnowledgeService.gs**: Unified knowledge management for fetching Google Drive documents and injecting into AI prompts
-- **PromptBuilder.gs**: Centralized prompt construction for all AI operations (categorization, summarization, reply drafting)
+- **PromptBuilder.gs**: Core email classification prompt (`buildCategorizePrompt_()`) - agents build their own prompts (ADR-022)
 - **Agents.gs**: Pluggable agent system for extensible email processing
 - **GmailService.gs**: Gmail API operations, thread management, and generic service functions
 - **Config.gs**: Configuration management using Apps Script Properties
 - **WebAppController.gs**: Web app entry point and API orchestration for interactive dashboard
 - **WebApp.html**: Mobile-optimized HTML interface for on-demand email summarization
-- **AgentReplyDrafter.gs**: Self-contained Reply Drafter agent for automatic draft replies
-- **AgentSummarizer.gs**: Self-contained Email Summarizer agent with independent lifecycle management
+- **AgentReplyDrafter.gs**: Self-contained Reply Drafter agent with own prompt building (`buildReplyDraftPrompt_()`)
+- **AgentSummarizer.gs**: Self-contained Email Summarizer agent with own prompt building (`buildSummaryPrompt_()`)
 - **AgentTemplate.gs**: Enhanced agent template demonstrating self-contained patterns
 
 ### Data Flow
@@ -231,12 +231,13 @@ The system uses a **dual-hook agent architecture** where agents can implement tw
 1. Create agent file (e.g., `AgentMyFeature.gs`) with self-contained architecture
 2. Implement configuration management with agent-specific property keys
 3. Handle label creation and management within the agent (if needed)
-4. Implement hook functions:
+4. **Build agent-specific AI prompts** within the agent file (ADR-022)
+5. Implement hook functions:
    - **onLabel**: Immediate per-email actions during classification (optional)
    - **postLabel**: Inbox-wide scan after all labeling complete (optional)
    - At least one hook MUST be provided
-5. Use generic service functions from `GmailService.gs` for common operations
-6. **Self-register with `AGENT_MODULES.push()` pattern** - no core system changes needed
+6. Use generic service functions from `GmailService.gs` for common operations
+7. **Self-register with `AGENT_MODULES.push()` pattern** - no core system changes needed
 
 **Dual-Hook Registration Pattern**:
 ```javascript
@@ -283,6 +284,83 @@ Use these functions for common operations:
 - `manageLabelTransition_()`: Efficient label management
 - `archiveEmailsByIds_()`: Batch email archiving
 - `sendFormattedEmail_()`: Send formatted HTML emails
+
+#### Agent-Owned Prompt Building (ADR-022)
+
+Agents that use AI **must build their own prompts** within the agent file. This ensures complete self-containment and independent evolution.
+
+**Standard Prompt Building Pattern:**
+```javascript
+// Agent-owned prompt builder (in agent file, e.g., AgentReplyDrafter.gs)
+function buildAgentPrompt_(taskData, agentKnowledge, globalKnowledge) {
+  const parts = ['Base agent instructions...'];
+
+  // 1. GLOBAL KNOWLEDGE INJECTION (organizational context - applies to ALL AI)
+  if (globalKnowledge && globalKnowledge.configured) {
+    parts.push('');
+    parts.push('=== GLOBAL KNOWLEDGE ===');
+    parts.push(globalKnowledge.knowledge);
+  }
+
+  // 2. AGENT-SPECIFIC KNOWLEDGE INJECTION (how to perform this task)
+  if (agentKnowledge && agentKnowledge.configured) {
+    parts.push('');
+    parts.push('=== AGENT INSTRUCTIONS ===');
+    parts.push(agentKnowledge.knowledge);
+  }
+
+  // 3. TASK DATA INJECTION (emails, threads, content to process)
+  parts.push('');
+  parts.push('=== TASK DATA ===');
+  parts.push(formatTaskData_(taskData));
+
+  return parts.join('\n');
+}
+```
+
+**Knowledge Injection Order (Always):**
+1. Base instructions (built into prompt)
+2. Global knowledge (organizational context from `GLOBAL_KNOWLEDGE_FOLDER_URL`)
+3. Agent-specific knowledge (task instructions from agent config)
+4. Task data (emails, threads, content)
+
+**Agent Workflow with Prompt Building:**
+```javascript
+function agentOnLabel_(ctx) {
+  // 1. Fetch global knowledge (shared across ALL AI operations)
+  const cfg = getConfig_();
+  const globalKnowledge = fetchGlobalKnowledge_({
+    folderUrl: cfg.GLOBAL_KNOWLEDGE_FOLDER_URL,
+    maxDocs: parseInt(cfg.GLOBAL_KNOWLEDGE_MAX_DOCS || '5')
+  });
+
+  // 2. Fetch agent-specific knowledge
+  const agentConfig = getAgentConfig_();
+  const agentKnowledge = fetchAgentKnowledge_({
+    instructionsUrl: agentConfig.AGENT_INSTRUCTIONS_URL,
+    knowledgeFolderUrl: agentConfig.AGENT_KNOWLEDGE_FOLDER_URL,
+    maxDocs: agentConfig.AGENT_KNOWLEDGE_MAX_DOCS
+  });
+
+  // 3. Build prompt using agent-owned function
+  const prompt = buildAgentPrompt_(taskData, agentKnowledge, globalKnowledge);
+
+  // 4. Call LLM service with pre-built prompt
+  const result = callLLMService_(prompt, model, ...);
+}
+```
+
+**Why Agents Own Their Prompts:**
+- **Complete self-containment**: Agent manages config + labels + prompts + logic
+- **Independent evolution**: Change prompts without touching core system
+- **Clear ownership**: Agent file is single source of truth
+- **Simpler core**: `PromptBuilder.gs` only contains core classification prompt
+
+**Core vs. Agent Prompts:**
+- **Core (`PromptBuilder.gs`)**: `buildCategorizePrompt_()` for email classification
+- **Reply Drafter**: `buildReplyDraftPrompt_()` in `AgentReplyDrafter.gs`
+- **Email Summarizer**: `buildSummaryPrompt_()` in `AgentSummarizer.gs`
+- **Your Agent**: `buildYourAgentPrompt_()` in `AgentYourFeature.gs`
 
 ### KnowledgeService: Unified Knowledge Management
 
@@ -559,12 +637,14 @@ Refer to `docs/adr/` for complete context:
 - **ADR-002**: Gemini API integration with dual authentication modes
 - **ADR-003**: Four-label classification system for simplicity
 - **ADR-004**: Pluggable agent architecture for extensibility
-- **ADR-005**: Batch processing with budget management
+- **ADR-005**: Batch processing with budget management (superseded by ADR-021 - native quota management)
 - **ADR-006**: Support for both API key and Vertex AI authentication
 - **ADR-007**: Google Drive document integration for classification rules
 - **ADR-011**: Self-contained agent architecture for independent modules
 - **ADR-012**: Generic service layer pattern for reusable agent operations
 - **ADR-019**: Global knowledge folder for organization-wide context shared across all AI features
+- **ADR-021**: Removed internal budget system - quota management via Google Cloud Console
+- **ADR-022**: Agent-owned prompt building for complete self-containment
 
 ## Testing and Debugging
 

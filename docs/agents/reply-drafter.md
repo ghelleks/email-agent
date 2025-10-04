@@ -641,6 +641,115 @@ The Reply Drafter uses the dual-hook pattern introduced in ADR-018:
 
 This architecture ensures comprehensive coverage - no `reply_needed` email goes without a draft, regardless of how it got the label. Both hooks run automatically within the single hourly email processing trigger.
 
+### Prompt Building (ADR-022)
+
+The Reply Drafter **owns its prompt building function** (`buildReplyDraftPrompt_()`) within `AgentReplyDrafter.gs`, ensuring complete self-containment and independent evolution.
+
+**Why Agent-Owned Prompts:**
+- **Complete self-containment**: Agent manages config + labels + prompts + logic
+- **Independent evolution**: Change prompts without touching core system files
+- **Clear ownership**: `AgentReplyDrafter.gs` is single source of truth
+- **Consistent with ADR-022**: All agents own their prompt building
+
+**Prompt Structure:**
+
+The Reply Drafter follows the standard prompt building pattern with knowledge injection:
+
+1. **Base instructions**: Built-in drafting guidelines
+2. **Global knowledge**: Organization-wide context (team structure, projects, terminology)
+3. **Reply-specific knowledge**: Drafting style, tone, examples from Google Drive
+4. **Email thread**: Full conversation history for context-aware drafts
+
+**Knowledge Injection Order:**
+
+```javascript
+function buildReplyDraftPrompt_(emailThread, replyKnowledge, globalKnowledge) {
+  const parts = ['You are drafting a professional email reply.'];
+
+  // 1. GLOBAL KNOWLEDGE (organizational context - ADR-019)
+  if (globalKnowledge && globalKnowledge.configured) {
+    parts.push('');
+    parts.push('=== GLOBAL KNOWLEDGE ===');
+    parts.push(globalKnowledge.knowledge);
+  }
+
+  // 2. REPLY-SPECIFIC KNOWLEDGE (drafting style - ADR-015)
+  if (replyKnowledge && replyKnowledge.configured) {
+    parts.push('');
+    parts.push('=== YOUR DRAFTING INSTRUCTIONS ===');
+    parts.push(replyKnowledge.knowledge);
+  }
+
+  // 3. EMAIL THREAD (conversation context)
+  parts.push('');
+  parts.push('=== EMAIL THREAD ===');
+  parts.push(formatEmailThread_(emailThread));
+
+  // 4. REPLY INSTRUCTIONS
+  parts.push('');
+  parts.push('=== REPLY INSTRUCTIONS ===');
+  parts.push('Draft a professional reply...');
+
+  return parts.join('\n');
+}
+```
+
+**Integration with Agent Workflow:**
+
+```javascript
+function processReplyNeeded_(ctx) {
+  // 1. Fetch global knowledge (shared across ALL AI operations)
+  const cfg = getConfig_();
+  const globalKnowledge = fetchGlobalKnowledge_({
+    folderUrl: cfg.GLOBAL_KNOWLEDGE_FOLDER_URL,
+    maxDocs: parseInt(cfg.GLOBAL_KNOWLEDGE_MAX_DOCS || '5')
+  });
+
+  // 2. Fetch reply-specific knowledge
+  const config = getReplyDrafterConfig_();
+  const replyKnowledge = fetchReplyKnowledge_({
+    instructionsUrl: config.REPLY_DRAFTER_INSTRUCTIONS_URL,
+    knowledgeFolderUrl: config.REPLY_DRAFTER_KNOWLEDGE_FOLDER_URL,
+    maxDocs: config.REPLY_DRAFTER_KNOWLEDGE_MAX_DOCS
+  });
+
+  // 3. Build prompt using agent-owned function
+  const prompt = buildReplyDraftPrompt_(emailThread, replyKnowledge, globalKnowledge);
+
+  // 4. Call LLM service with pre-built prompt
+  const draftText = generateReplyDraft_(prompt, model, projectId, location, apiKey);
+
+  // 5. Create Gmail draft
+  createDraftReply_(threadId, draftText);
+}
+```
+
+**Token Utilization Transparency:**
+
+When `REPLY_DRAFTER_DEBUG=true`, the prompt builder logs token usage:
+
+```json
+{
+  "globalKnowledgeUtilization": "1.2%",
+  "estimatedTokens": 12582,
+  "modelLimit": 1048576
+}
+```
+
+```json
+{
+  "replyDrafterKnowledgeUtilization": "0.8%",
+  "estimatedTokens": 8388
+}
+```
+
+**Key Features:**
+
+- **Graceful degradation**: Provides fallback instructions when knowledge not configured
+- **Format enforcement**: Ensures drafts have proper structure (greeting, body, signature)
+- **Signature handling**: Automatically includes user name from instructions or placeholder
+- **Context preservation**: Full thread awareness for multi-message conversations
+
 ### Integration with Core System
 
 **Agent Registration:**
@@ -679,12 +788,12 @@ AGENT_MODULES.push(function(api) {
 
 ### Prompt Engineering Pattern
 
-The Reply Drafter follows [ADR-010: PromptBuilder and LLMService Separation](../../docs/adr/010-promptbuilder-llmservice-separation.md):
+The Reply Drafter follows [ADR-022: Agent-Owned Prompt Building](../../docs/adr/022-agent-owned-prompts.md) and [ADR-010: PromptBuilder and LLMService Separation](../../docs/adr/010-promptbuilder-llmservice-separation.md):
 
 **Separation of Concerns:**
-- **PromptBuilder.gs**: `buildReplyDraftPrompt_()` constructs AI prompts with knowledge injection
+- **AgentReplyDrafter.gs**: `buildReplyDraftPrompt_()` constructs AI prompts with knowledge injection (ADR-022)
 - **LLMService.gs**: `generateReplyDraft_()` handles API communication and authentication
-- **AgentReplyDrafter.gs**: Orchestrates workflow and manages agent-specific logic
+- **Agent orchestrates**: Fetches knowledge, builds prompt, calls LLM service, creates draft
 
 **Knowledge Integration:**
 ```javascript
@@ -850,10 +959,15 @@ The Reply Drafter follows the self-contained agent architecture:
 
 Implementation: `src/AgentReplyDrafter.gs`
 
+Agent-owned functions:
+- `buildReplyDraftPrompt_()` - AI prompt construction with knowledge injection (ADR-022)
+- `getReplyDrafterConfig_()` - Configuration management
+- `processReplyNeeded_()` - onLabel handler
+- `replyDrafterPostLabelScan_()` - postLabel handler
+
 Supporting services:
-- `src/PromptBuilder.gs`: `buildReplyDraftPrompt_()` function
-- `src/LLMService.gs`: `generateReplyDraft_()` function
-- `src/KnowledgeService.gs`: `fetchReplyKnowledge_()` function
+- `src/LLMService.gs`: `generateReplyDraft_()` function for AI communication
+- `src/KnowledgeService.gs`: `fetchReplyKnowledge_()` and `fetchGlobalKnowledge_()` functions
 
 ### Architecture Decisions
 
@@ -862,6 +976,8 @@ Supporting services:
 - [ADR-011: Self-Contained Agent Architecture](../../docs/adr/011-self-contained-agents.md) - Independent agent lifecycle
 - [ADR-015: INSTRUCTIONS vs KNOWLEDGE Naming Convention](../../docs/adr/015-instructions-knowledge-naming.md) - Configuration property naming
 - [ADR-018: Dual-Hook Agent Architecture](../../docs/adr/018-dual-hook-agent-architecture.md) - Current execution model (onLabel + postLabel)
+- [ADR-019: Global Knowledge Folder Architecture](../../docs/adr/019-global-knowledge-folder.md) - Organization-wide context shared across all AI operations
+- [ADR-022: Agent-Owned Prompt Building](../../docs/adr/022-agent-owned-prompts.md) - Agent owns `buildReplyDraftPrompt_()` for complete self-containment
 
 ### Agent Context API
 

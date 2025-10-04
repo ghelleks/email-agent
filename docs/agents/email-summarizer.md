@@ -414,6 +414,117 @@ The Email Summarizer creates and manages these labels:
 3. Receive batch summary
 4. Use summary to prioritize which emails to read in full
 
+## Prompt Building (ADR-022)
+
+The Email Summarizer **owns its prompt building function** (`buildSummaryPrompt_()`) within `AgentSummarizer.gs`, ensuring complete self-containment and independent evolution.
+
+**Why Agent-Owned Prompts:**
+- **Complete self-containment**: Agent manages config + labels + prompts + logic
+- **Independent evolution**: Change prompts without touching core system files
+- **Clear ownership**: `AgentSummarizer.gs` is single source of truth
+- **Consistent with ADR-022**: All agents own their prompt building
+
+**Prompt Structure:**
+
+The Email Summarizer follows the standard prompt building pattern with knowledge injection:
+
+1. **Base instructions**: Built-in summarization guidelines (Economist "World in Brief" style)
+2. **Global knowledge**: Organization-wide context (team structure, projects, terminology)
+3. **Summarizer-specific knowledge**: Summary style, tone, formatting from Google Drive
+4. **Email data**: Batch of emails to summarize with metadata
+
+**Knowledge Injection Order:**
+
+```javascript
+function buildSummaryPrompt_(emails, summarizerKnowledge, globalKnowledge) {
+  const parts = ['You are summarizing emails in Economist style.'];
+
+  // 1. GLOBAL KNOWLEDGE (organizational context - ADR-019)
+  if (globalKnowledge && globalKnowledge.configured) {
+    parts.push('');
+    parts.push('=== GLOBAL KNOWLEDGE ===');
+    parts.push(globalKnowledge.knowledge);
+  }
+
+  // 2. SUMMARIZER-SPECIFIC KNOWLEDGE (style preferences - ADR-015)
+  if (summarizerKnowledge && summarizerKnowledge.configured) {
+    parts.push('');
+    parts.push('=== YOUR SUMMARIZATION INSTRUCTIONS ===');
+    parts.push(summarizerKnowledge.knowledge);
+  } else {
+    // Fallback to default Economist style
+    parts.push('');
+    parts.push('=== DEFAULT STYLE ===');
+    parts.push('Use Economist "World in Brief" style: concise, factual, contextual.');
+  }
+
+  // 3. EMAIL DATA (emails to summarize)
+  parts.push('');
+  parts.push('=== EMAILS TO SUMMARIZE ===');
+  emails.forEach(email => {
+    parts.push(formatEmailForSummary_(email));
+  });
+
+  return parts.join('\n');
+}
+```
+
+**Integration with Agent Workflow:**
+
+```javascript
+function runEmailSummarizer() {
+  // 1. Fetch global knowledge (shared across ALL AI operations)
+  const cfg = getConfig_();
+  const globalKnowledge = fetchGlobalKnowledge_({
+    folderUrl: cfg.GLOBAL_KNOWLEDGE_FOLDER_URL,
+    maxDocs: parseInt(cfg.GLOBAL_KNOWLEDGE_MAX_DOCS || '5')
+  });
+
+  // 2. Fetch summarizer-specific knowledge
+  const config = getSummarizerConfig_();
+  const summarizerKnowledge = fetchSummarizerKnowledge_({
+    instructionsUrl: config.SUMMARIZER_INSTRUCTIONS_DOC_URL,
+    knowledgeFolderUrl: config.SUMMARIZER_KNOWLEDGE_FOLDER_URL,
+    maxDocs: config.SUMMARIZER_KNOWLEDGE_MAX_DOCS
+  });
+
+  // 3. Build prompt using agent-owned function
+  const prompt = buildSummaryPrompt_(emails, summarizerKnowledge, globalKnowledge);
+
+  // 4. Call LLM service with pre-built prompt
+  const summaryText = generateSummary_(prompt, model, projectId, location, apiKey);
+
+  // 5. Format and send summary email
+  sendFormattedEmail_(destination, subject, htmlContent, emails);
+}
+```
+
+**Token Utilization Transparency:**
+
+When `SUMMARIZER_DEBUG=true`, the prompt builder logs token usage:
+
+```json
+{
+  "globalKnowledgeUtilization": "1.2%",
+  "estimatedTokens": 12582,
+  "modelLimit": 1048576
+}
+```
+
+```json
+{
+  "summarizerKnowledgeUtilization": "2.5%",
+  "estimatedTokens": 26214
+}
+```
+
+**Key Features:**
+
+- **Graceful degradation**: Falls back to default Economist style when knowledge not configured
+- **Format enforcement**: Ensures summaries have executive summary + key details + web links
+- **Batch processing**: Handles multiple emails in single AI request
+- **Hyperlink preservation**: Maintains source email links and web URLs from content
+
 ## Integration with Web App
 
 The Email Summarizer agent works independently but complements the [Web App Dashboard](../features/web-app.md):
@@ -440,11 +551,24 @@ The Email Summarizer follows the [self-contained agent architecture](../../docs/
 
 Implementation: `src/AgentSummarizer.gs`
 
+Agent-owned functions:
+- `buildSummaryPrompt_()` - AI prompt construction with knowledge injection (ADR-022)
+- `getSummarizerConfig_()` - Configuration management
+- `summarizerOnLabel_()` - onLabel handler (archives on label)
+- `runEmailSummarizer()` - Scheduled summarization function
+
+Supporting services:
+- `src/LLMService.gs`: `generateSummary_()` function for AI communication
+- `src/KnowledgeService.gs`: `fetchSummarizerKnowledge_()` and `fetchGlobalKnowledge_()` functions
+
 ### Architecture Decisions
 
-- [ADR-011: Self-Contained Agent Architecture](../../docs/adr/011-self-contained-agents.md)
-- [ADR-012: Generic Service Layer Pattern](../../docs/adr/012-generic-service-layer.md)
-- [ADR-015: INSTRUCTIONS vs KNOWLEDGE Naming Convention](../../docs/adr/015-instructions-vs-knowledge-naming.md)
+- [ADR-011: Self-Contained Agent Architecture](../../docs/adr/011-self-contained-agents.md) - Independent agent lifecycle
+- [ADR-012: Generic Service Layer Pattern](../../docs/adr/012-generic-service-layer.md) - Reusable Gmail operations
+- [ADR-015: INSTRUCTIONS vs KNOWLEDGE Naming Convention](../../docs/adr/015-instructions-vs-knowledge-naming.md) - Configuration property naming
+- [ADR-018: Dual-Hook Agent Architecture](../../docs/adr/018-dual-hook-agent-architecture.md) - onLabel for immediate archive
+- [ADR-019: Global Knowledge Folder Architecture](../../docs/adr/019-global-knowledge-folder.md) - Organization-wide context shared across all AI operations
+- [ADR-022: Agent-Owned Prompt Building](../../docs/adr/022-agent-owned-prompts.md) - Agent owns `buildSummaryPrompt_()` for complete self-containment
 
 ## See Also
 

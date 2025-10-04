@@ -41,6 +41,8 @@ All ADRs in this project follow a consistent format defined in [template.md](tem
 - [ADR-018: Dual-Hook Agent Architecture](018-dual-hook-agent-architecture.md) ⚠️ Breaking Change
 - [ADR-019: Global Knowledge Folder Architecture](019-global-knowledge-folder.md)
 - [ADR-020: Todo Forwarder Agent Implementation](020-todo-forwarder-agent.md)
+- [ADR-021: Remove Internal Budget Management](021-remove-internal-budget-management.md)
+- [ADR-022: Agent-Owned Prompt Building](022-agent-owned-prompts.md) - Agent-owned prompt functions for complete self-containment
 
 ## Status Legend
 
