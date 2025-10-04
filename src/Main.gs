@@ -3,14 +3,6 @@ function run() {
   const usingApiKey = !!cfg.GEMINI_API_KEY;
   if (!usingApiKey && !cfg.PROJECT_ID) throw new Error('Set GEMINI_API_KEY (API key mode) or GOOGLE_CLOUD_PROJECT (Vertex mode).');
 
-  // Clean up old budget properties to prevent accumulation
-  try {
-    cleanupOldBudgetProperties_(cfg);
-  } catch (e) {
-    if (cfg.DEBUG) console.log('Budget cleanup error: ' + (e && e.toString ? e.toString() : String(e)));
-    // Non-fatal error - continue execution
-  }
-
   // First, load any agent modules queued in AGENT_MODULES
   try {
     if (typeof Agents !== 'undefined' && Agents && typeof Agents.registerAllModules === 'function') {

@@ -771,19 +771,19 @@ const draftText = generateReplyDraft_(prompt, model, projectId, location, apiKey
 
 **Solution**: Verify Google Drive documents are accessible (not causing API delays)
 
-**Solution**: Check if `DAILY_GEMINI_BUDGET` is exceeded (see [Configuration Reference](../guides/configuration.md))
+**Solution**: Check API quota usage at Google Cloud Console: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 
 **Solution**: Review execution logs for specific timeout errors
 
-### Budget exceeded errors
+### API quota exceeded errors
 
-**Solution**: Reply Drafter respects global `DAILY_GEMINI_BUDGET` setting
+**Solution**: Monitor API quota at Google Cloud Console: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 
-**Solution**: Increase budget or reduce email volume processed per run
+**Solution**: Request quota increase through Google Cloud Console if needed
 
 **Solution**: Use `MAX_EMAILS_PER_RUN` to limit emails processed in each execution
 
-**Solution**: Monitor budget usage via execution logs
+**Solution**: Consider upgrading to a paid API tier for higher quotas
 
 ## Best Practices
 
@@ -831,7 +831,7 @@ const draftText = generateReplyDraft_(prompt, model, projectId, location, apiKey
 - **Draft visibility**: Drafts are only visible to you, not sent automatically
 - **Thread context**: Full email thread content sent to AI for context (Google's Gemini)
 - **Knowledge documents**: Ensure sensitive information not included in instructions/knowledge
-- **API usage**: Reply drafting counts against your `DAILY_GEMINI_BUDGET`
+- **API usage**: Reply drafting uses Gemini API - monitor quota at Google Cloud Console
 - **Access control**: Verify Google Drive permissions on instructions/knowledge documents
 
 ## Technical Details

@@ -12,7 +12,7 @@ This guide explains how the current system works and how to configure, extend, a
 ## Repository Layout
 - `src/Main.gs`: entry points (`run`, triggers) and orchestration
 - `src/Config.gs`: loads Script Properties and defaults
-- `src/Categorizer.gs`: batching, model calls, budget enforcement, normalization
+- `src/Categorizer.gs`: batching, model calls, response normalization
 - `src/Organizer.gs`: applies labels to threads, summarizes outcomes
 - `src/KnowledgeService.gs`: unified knowledge management from Google Drive
 - `src/LLMService.gs`: model request/response glue (used by categorizer)
@@ -35,9 +35,10 @@ Optional / Advanced:
 - `MAX_EMAILS_PER_RUN`: default `20`
 - `BATCH_SIZE`: default `10`
 - `BODY_CHARS`: default `1200` (max characters of body excerpt per email)
-- `DAILY_GEMINI_BUDGET`: default `50` (max model calls per day)
 - `DRY_RUN`: `true|false`, default `false`
 - `DEBUG`: `true|false`, default `false`
+
+Note: API quotas are managed through Google Cloud Console. Monitor usage at: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 
 Vertex mode (optional):
 - `GOOGLE_CLOUD_PROJECT` (or `PROJECT_ID`): required only if no API key is set
@@ -107,18 +108,17 @@ npm run open
 
 ## Execution Flow
 1. `run()` reads config via `getConfig_()`.
-2. Cleans up old budget properties via `cleanupOldBudgetProperties_()`.
-3. Ensures labels exist.
-4. Loads knowledge from Drive via `fetchLabelingKnowledge_()` (optional).
-5. Queries candidate threads and extracts minimal email data.
-6. Sends batches to Gemini and parses a JSON result per email: `{ id, required_action, reason }`.
-7. Normalizes `required_action` to a valid label or falls back.
-8. Applies exactly one label per thread and logs a summary.
+2. Ensures labels exist.
+3. Loads knowledge from Drive via `fetchLabelingKnowledge_()` (optional).
+4. Queries candidate threads and extracts minimal email data.
+5. Sends batches to Gemini and parses a JSON result per email: `{ id, required_action, reason }`.
+6. Normalizes `required_action` to a valid label or falls back.
+7. Applies exactly one label per thread and logs a summary.
 
 ### Key Functions
 - `run()` (in `Main.gs`): Orchestrates the entire run and logs a JSON summary.
 - `installTrigger()` / `deleteExistingTriggers_()` (in `Main.gs`): Manage time-based triggers.
-- `categorizeWithGemini_()` (in `Categorizer.gs`): Handles batching, budget checks, normalization.
+- `categorizeWithGemini_()` (in `Categorizer.gs`): Handles batching and response normalization.
 - `categorizeBatch_()` (in `LLMService.gs`): Builds request, calls model endpoint, and parses responses.
 - `fetchLabelingKnowledge_()` (in `KnowledgeService.gs`): Loads knowledge documents from Drive.
 - `Organizer.apply_()` (in `Organizer.gs`): Applies labels and returns counts.
@@ -134,10 +134,9 @@ npm run open
 - Vertex mode endpoint: `https://<location>-aiplatform.googleapis.com/v1/projects/<project>/locations/<location>/publishers/google/models/<model>:generateContent`
 - Debug logs include HTTP status and raw model output when `DEBUG=true`.
 
-## Budgeting & Batching
-- `DAILY_GEMINI_BUDGET`: soft limit on calls/day (tracked in Script Properties, reset daily).
+## Batching
 - `BATCH_SIZE`: number of emails per model call.
-- If budget is exceeded, items are marked with `reason: 'budget-exceeded'` and skipped.
+- API quotas are managed natively by Google Cloud. Monitor at: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 
 ## Error Handling & Normalization
 - Robust JSON extraction: takes the first JSON object in the model output.
@@ -660,7 +659,7 @@ if (thread.getLabels().some(l => l.getName() === 'agent_processed')) {
 
 ## Security & Permissions
 - Scopes required: Gmail modify, Drive read-only, external requests, script runtime, cloud-platform.
-- The script stores daily budget counters and flags in Script Properties.
+- The script uses Script Properties for configuration and agent state management.
 
 ## Versioning & Releases
 

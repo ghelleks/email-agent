@@ -7,10 +7,6 @@ function categorizeWithGemini_(emails, knowledge, cfg, globalKnowledge) {
 
   const results = [];
   for (const batch of batches) {
-    if (!enforceBudget_(1, cfg.DAILY_GEMINI_BUDGET)) {
-      results.push.apply(results, batch.map(function(e) { return { id: e.id, required_action: null, reason: 'budget-exceeded', threadId: e.threadId }; }));
-      continue;
-    }
     // Build prompt using PromptBuilder (enforces separation of concerns)
     const prompt = buildCategorizePrompt_(batch, knowledge,
       ['reply_needed', 'review', 'todo', 'summarize'],

@@ -23,7 +23,7 @@ All ADRs in this project follow a consistent format defined in [template.md](tem
 - [ADR-004: Pluggable Agents Architecture](004-pluggable-agents.md)
 
 ### Operational Decisions (Medium Priority)
-- [ADR-005: Batch Processing and Budget Management](005-batch-processing-budget.md)
+- [ADR-005: Batch Processing and Budget Management](005-batch-processing-budget.md) (Superseded by ADR-021)
 - [ADR-006: Dual Authentication Model](006-dual-authentication.md)
 - [ADR-007: Google Drive Rules Document Integration](007-drive-rules-integration.md)
 
@@ -41,6 +41,7 @@ All ADRs in this project follow a consistent format defined in [template.md](tem
 - [ADR-018: Dual-Hook Agent Architecture](018-dual-hook-agent-architecture.md) ⚠️ Breaking Change
 - [ADR-019: Global Knowledge Folder Architecture](019-global-knowledge-folder.md)
 - [ADR-020: Todo Forwarder Agent Implementation](020-todo-forwarder-agent.md)
+- [ADR-021: Remove Internal Budget Management System](021-remove-internal-budget-management.md) (Supersedes ADR-005)
 
 ## Status Legend
 

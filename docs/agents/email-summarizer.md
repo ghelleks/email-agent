@@ -364,7 +364,7 @@ The Email Summarizer creates and manages these labels:
 
 **Solution**: Reduce `SUMMARIZER_MAX_EMAILS_PER_SUMMARY` to a smaller number (try `25`)
 
-**Solution**: Check that `DAILY_GEMINI_BUDGET` hasn't been exceeded (see [Configuration Reference](../guides/configuration.md))
+**Solution**: Check API quota usage at Google Cloud Console: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
 
 **Solution**: Enable `SUMMARIZER_DEBUG=true` and check execution logs
 
