@@ -126,6 +126,7 @@ The `deploy:[account]` commands attempt automated trigger installation but may f
 - **WebApp.html**: Mobile-optimized HTML interface for on-demand email summarization
 - **AgentReplyDrafter.gs**: Self-contained Reply Drafter agent with own prompt building (`buildReplyDraftPrompt_()`)
 - **AgentSummarizer.gs**: Self-contained Email Summarizer agent with own prompt building (`buildSummaryPrompt_()`)
+- **AgentTodoForwarder.gs**: Self-contained Todo Forwarder agent for automated todo email forwarding
 - **AgentTemplate.gs**: Enhanced agent template demonstrating self-contained patterns
 
 ### Data Flow
@@ -272,6 +273,7 @@ AGENT_MODULES.push(function(api) {
 **Examples of Dual-Hook Agents**:
 - **AgentReplyDrafter.gs**: onLabel (immediate draft) + postLabel (catch manual labels)
 - **AgentSummarizer.gs**: onLabel (archive on label) + postLabel (null - uses scheduled trigger instead)
+- **AgentTodoForwarder.gs**: onLabel (immediate forward) + postLabel (catch manual labels)
 
 **IMPORTANT**: The old single-function registration pattern is NO LONGER SUPPORTED. All agents must migrate to dual-hook pattern.
 
@@ -607,6 +609,7 @@ The system uses exactly four core labels (ADR-003):
 #### Agent-Managed Labels
 Self-contained agents may create and manage additional labels:
 - `summarized`: Emails processed by the Email Summarizer agent (archived)
+- `todo_forwarded`: Emails forwarded by the Todo Forwarder agent (idempotency tracking)
 - Custom agent labels as needed (agents manage their own label lifecycle)
 
 **Note**: The Reply Drafter agent does not create additional labels - it operates solely on emails labeled `reply_needed` by the core classification system.
@@ -730,6 +733,29 @@ Refer to `docs/adr/` for complete context:
 - **Solution**: Add example drafts to `REPLY_DRAFTER_KNOWLEDGE_FOLDER_URL` for AI to learn from
 - **Solution**: Enable `REPLY_DRAFTER_DEBUG=true` to see token utilization and knowledge loading
 - **Solution**: Review generated drafts and refine instructions document based on patterns
+
+**🔍 Problem**: Todo Forwarder not forwarding emails
+- **Solution**: Verify `TODO_FORWARDER_ENABLED=true` in Script Properties
+- **Solution**: Configure `TODO_FORWARDER_EMAIL` with destination email address (required)
+- **Solution**: Check that emails have `todo` label applied by core classification
+- **Solution**: Verify core email labeling trigger (`installTrigger`) is installed and running hourly
+- **Solution**: Enable `TODO_FORWARDER_DEBUG=true` for detailed logging
+- **Solution**: Test with `TODO_FORWARDER_DRY_RUN=true` to verify agent runs without forwarding
+- **Solution**: Check execution logs for both onLabel and postLabel handler execution
+- **Solution**: For manually labeled emails, postLabel hook will process them on next hourly run
+
+**🔍 Problem**: Todo Forwarder forwarding duplicate emails
+- **Solution**: Check for `todo_forwarded` label on emails (should prevent duplicates)
+- **Solution**: Verify labels are applied correctly (both `todo` and `todo_forwarded` should exist)
+- **Solution**: Review execution logs for idempotency checks
+- **Solution**: If duplicates persist, remove `todo_forwarded` labels and let system recreate them
+
+**🔍 Problem**: Todo Forwarder destination not receiving emails
+- **Solution**: Verify `TODO_FORWARDER_EMAIL` is correct email address format
+- **Solution**: Check spam folder of destination email account
+- **Solution**: Test with personal email address first to verify forwarding works
+- **Solution**: Review GmailApp quota limits (100 emails/day for consumer accounts)
+- **Solution**: Check execution logs for "Forward failed" error messages
 
 **🔍 Problem**: API quota exceeded
 - **Solution**: Monitor quota usage at Google Cloud Console: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas

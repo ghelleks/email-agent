@@ -140,6 +140,25 @@ Perfect for processing newsletters, long email threads, or multiple related emai
 
 [Email Summarizer Documentation →](docs/agents/email-summarizer.md)
 
+### Todo Forwarder Agent
+
+**What it adds**: Automatic forwarding of emails labeled `todo` to external task management systems
+
+Perfect for integrating Gmail with task management tools like Todoist, Asana, or any email-based task creation system. Automatically forwards todo emails with full thread context, prevents duplicates, and optionally removes labels and archives.
+
+**How it works**:
+- Immediate forwarding for newly-classified emails (onLabel hook)
+- Inbox-wide scanning for manually-labeled emails (postLabel hook)
+- Both hooks run in the hourly email processing cycle (no separate trigger needed)
+
+**Quick configuration example**:
+```
+TODO_FORWARDER_ENABLED = true
+TODO_FORWARDER_EMAIL = mytasks@todoist.com
+```
+
+[Todo Forwarder Documentation →](docs/agents/todo-forwarder.md)
+
 ### Interactive Web App Dashboard
 
 **What it adds**: Mobile-optimized web interface for on-demand email summarization
@@ -180,6 +199,7 @@ Teach the AI about your specific email patterns, priorities, and preferences usi
 
 - [Reply Drafter Agent](docs/agents/reply-drafter.md) — Automatic draft replies with AI
 - [Email Summarizer Agent](docs/agents/email-summarizer.md) — Daily email summaries
+- [Todo Forwarder Agent](docs/agents/todo-forwarder.md) — Automatic todo email forwarding
 - [Web App Dashboard](docs/features/web-app.md) — On-demand summarization interface
 - [Multi-Account Deployment](docs/features/multi-account.md) — Manage multiple accounts
 - [Knowledge System](docs/features/knowledge-system.md) — Customize AI classification

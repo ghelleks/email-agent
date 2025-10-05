@@ -305,6 +305,192 @@ SUMMARIZER_ARCHIVE_ON_LABEL = true
 SUMMARIZER_DRY_RUN = true
 ```
 
+## Todo Forwarder Issues
+
+See also: [Todo Forwarder Agent Documentation](../agents/todo-forwarder.md)
+
+### Todo Forwarder not forwarding emails
+
+**Symptoms**: Emails labeled `todo` are not being forwarded to destination.
+
+**Causes**:
+- Destination email not configured
+- Agent disabled
+- Core labeling trigger not installed
+- Configuration errors
+
+**Solutions**:
+
+**Solution 1**: Verify destination email is configured:
+```
+TODO_FORWARDER_EMAIL = mytasks@todoist.com
+```
+This is required - agent won't forward without it.
+
+**Solution 2**: Verify agent is enabled:
+```
+TODO_FORWARDER_ENABLED = true
+```
+
+**Solution 3**: Check core labeling trigger is installed:
+- Run `installTrigger` function in Apps Script editor
+- Verify trigger exists in "Triggers" section
+- Wait for next hourly execution
+
+**Solution 4**: Enable debug mode to diagnose:
+```
+TODO_FORWARDER_DEBUG = true
+TODO_FORWARDER_DRY_RUN = true
+```
+Check execution logs for "Todo Forwarder" messages.
+
+**Solution 5**: Manually test with labeled email:
+- Label an email with `todo` manually
+- Wait for next hourly trigger execution
+- Check execution logs for postLabel hook processing
+
+### Todo Forwarder forwarding duplicate emails
+
+**Symptoms**: Same email forwarded multiple times.
+
+**Causes**:
+- `todo_forwarded` label not being applied
+- Labels manually removed and re-added
+- Idempotency check failing
+
+**Solutions**:
+
+**Solution 1**: Verify `todo_forwarded` label exists:
+- Check Gmail for `todo_forwarded` label on processed emails
+- If missing, check execution logs for label errors
+
+**Solution 2**: Review idempotency logic:
+```
+TODO_FORWARDER_DEBUG = true
+```
+Check logs for "already forwarded" skip messages.
+
+**Solution 3**: Reset forwarded state:
+- Remove `todo_forwarded` labels if corrupted
+- Let system recreate them on next run
+- Verify labels applied correctly
+
+**Solution 4**: Check for manual label manipulation:
+- Removing `todo` and re-adding triggers onLabel hook
+- Email should still be skipped if has `todo_forwarded`
+- If not, investigate label state
+
+### Destination not receiving forwarded emails
+
+**Symptoms**: Agent logs show successful forwarding but destination doesn't receive emails.
+
+**Causes**:
+- Incorrect destination email address
+- Spam filtering at destination
+- Email quota exceeded
+- Destination email service issues
+
+**Solutions**:
+
+**Solution 1**: Verify email address format:
+```
+TODO_FORWARDER_EMAIL = correct@email.com
+```
+Check for typos, extra spaces, or incorrect format.
+
+**Solution 2**: Check spam/junk folder:
+- Forwarded emails may be filtered as spam
+- Whitelist your Gmail address at destination
+- Check destination's spam settings
+
+**Solution 3**: Test with personal email:
+```
+TODO_FORWARDER_EMAIL = your.personal@gmail.com
+```
+Verify forwarding works to known-good address first.
+
+**Solution 4**: Check Gmail send quota:
+- Consumer Gmail: 100 emails/day
+- Google Workspace: 1500 emails/day
+- Review execution logs for quota errors
+- Monitor quota at [Google Cloud Console](https://console.cloud.google.com/)
+
+**Solution 5**: Verify destination email is active:
+- Send test email manually to verify address works
+- Check with task management system support
+- Verify email integration is enabled
+
+### HTML formatting not displaying correctly
+
+**Symptoms**: Forwarded emails show plain text or broken formatting.
+
+**Causes**:
+- Destination email client doesn't support HTML
+- Email client stripping HTML for security
+- Very large threads exceeding size limits
+
+**Solutions**:
+
+**Solution 1**: Verify HTML support in destination client:
+- Check email client settings for "Display HTML"
+- Try different email client (e.g., Gmail web interface)
+- Verify plain text fallback message appears
+
+**Solution 2**: Test with Gmail destination:
+```
+TODO_FORWARDER_EMAIL = your.test@gmail.com
+```
+Gmail fully supports HTML formatting for testing.
+
+**Solution 3**: Check thread size:
+```
+TODO_FORWARDER_DEBUG = true
+```
+Review logs for very large thread warnings.
+
+**Solution 4**: Verify task management system HTML support:
+- Check system documentation for HTML email support
+- Some systems may only process plain text
+- Consider system-specific formatting requirements
+
+### Performance issues with Todo Forwarder
+
+**Symptoms**: Slow execution or timeouts when processing todos.
+
+**Causes**:
+- Large number of unforwarded todos
+- Very large email threads
+- Slow network to destination
+- Gmail API quota limits
+
+**Solutions**:
+
+**Solution 1**: Reduce emails processed per run:
+```
+MAX_EMAILS_PER_RUN = 10
+```
+
+**Solution 2**: Clear backlog gradually:
+- Manually forward old todos
+- Archive or remove old `todo` labels
+- Let agent process new todos going forward
+
+**Solution 3**: Monitor execution time:
+```
+TODO_FORWARDER_DEBUG = true
+```
+Check logs for slow thread retrievals or sends.
+
+**Solution 4**: Review Gmail API quota:
+- Monitor quota usage at Google Cloud Console
+- Each forward uses: 1 read + 1 send + 2-3 label operations
+- Request quota increase if needed
+
+**Solution 5**: Optimize postLabel scanning:
+- Ensure `todo_forwarded` labels applied correctly
+- Search query filters efficiently: `-label:todo_forwarded`
+- Clean up old todos to reduce inbox size
+
 ## Multi-Account Issues
 
 See also: [Multi-Account Documentation](../features/multi-account.md#troubleshooting)
@@ -679,6 +865,8 @@ Test specific functions in Apps Script editor:
 - [Back to README](../../README.md)
 - [Configuration Reference](configuration.md) - All configuration options
 - [Web App Documentation](../features/web-app.md) - Web app specific issues
-- [Email Summarizer Documentation](../agents/email-summarizer.md) - Agent specific issues
+- [Reply Drafter Documentation](../agents/reply-drafter.md) - Reply Drafter specific issues
+- [Email Summarizer Documentation](../agents/email-summarizer.md) - Email Summarizer specific issues
+- [Todo Forwarder Documentation](../agents/todo-forwarder.md) - Todo Forwarder specific issues
 - [Multi-Account Documentation](../features/multi-account.md) - Multi-account specific issues
 - [Knowledge System Documentation](../features/knowledge-system.md) - Knowledge system specific issues

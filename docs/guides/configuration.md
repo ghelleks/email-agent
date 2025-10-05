@@ -223,6 +223,71 @@ REPLY_DRAFTER_DEBUG = true
 REPLY_DRAFTER_DRY_RUN = true
 ```
 
+## Todo Forwarder Agent Configuration
+
+Settings for the [Todo Forwarder Agent](../agents/todo-forwarder.md).
+
+**Note**: Todo Forwarder configuration is managed in `AgentTodoForwarder.gs` via `getTodoForwarderConfig_()` function, following the self-contained agent architecture pattern.
+
+**Execution Mode**: The Todo Forwarder uses the **dual-hook pattern** to ensure comprehensive forwarding coverage:
+1. **onLabel Hook**: Runs during email classification (immediate forwarding for newly-classified emails)
+2. **postLabel Hook**: Runs after labeling complete (catches manually-labeled `todo` emails)
+
+Both hooks run within the hourly email processing cycle. **No separate trigger required.**
+
+### Basic Configuration
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `TODO_FORWARDER_ENABLED` | `true` | Enable/disable the Todo Forwarder agent (both hooks) |
+| `TODO_FORWARDER_EMAIL` | None | Email address to forward todos to (required - agent disabled if not set) |
+
+### Label Management Configuration
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `TODO_FORWARDER_REMOVE_TODO_LABEL` | `true` | Remove 'todo' label after successful forwarding |
+| `TODO_FORWARDER_ARCHIVE_AFTER_FORWARD` | `false` | Archive email after forwarding |
+
+### Debugging Configuration
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `TODO_FORWARDER_DEBUG` | `false` | Enable detailed logging for the agent |
+| `TODO_FORWARDER_DRY_RUN` | `false` | Test mode (analyze but don't forward emails) |
+
+**Configuration examples**:
+
+**Basic setup** (forward to task management system):
+```
+TODO_FORWARDER_ENABLED = true
+TODO_FORWARDER_EMAIL = mytasks@todoist.com
+```
+
+**Full workflow automation** (forward, remove label, archive):
+```
+TODO_FORWARDER_ENABLED = true
+TODO_FORWARDER_EMAIL = tasks@asana.com
+TODO_FORWARDER_REMOVE_TODO_LABEL = true
+TODO_FORWARDER_ARCHIVE_AFTER_FORWARD = true
+```
+
+**Keep emails in inbox** (forward only, preserve labels):
+```
+TODO_FORWARDER_ENABLED = true
+TODO_FORWARDER_EMAIL = todo@myapp.com
+TODO_FORWARDER_REMOVE_TODO_LABEL = false
+TODO_FORWARDER_ARCHIVE_AFTER_FORWARD = false
+```
+
+**Debug mode**:
+```
+TODO_FORWARDER_ENABLED = true
+TODO_FORWARDER_EMAIL = test@example.com
+TODO_FORWARDER_DEBUG = true
+TODO_FORWARDER_DRY_RUN = true
+```
+
 ## Knowledge System Configuration
 
 Settings for the [Knowledge System](../features/knowledge-system.md) (advanced).
@@ -543,6 +608,9 @@ Quick reference table of all default values:
 | `WEBAPP_ENABLED` | `true` | `WEBAPP_MAX_EMAILS_PER_SUMMARY` | `50` |
 | `REPLY_DRAFTER_ENABLED` | `true` | `REPLY_DRAFTER_KNOWLEDGE_MAX_DOCS` | `5` |
 | `REPLY_DRAFTER_DEBUG` | `false` | `REPLY_DRAFTER_DRY_RUN` | `false` |
+| `TODO_FORWARDER_ENABLED` | `true` | `TODO_FORWARDER_EMAIL` | None |
+| `TODO_FORWARDER_REMOVE_TODO_LABEL` | `true` | `TODO_FORWARDER_ARCHIVE_AFTER_FORWARD` | `false` |
+| `TODO_FORWARDER_DEBUG` | `false` | `TODO_FORWARDER_DRY_RUN` | `false` |
 | `KNOWLEDGE_CACHE_DURATION_MINUTES` | `30` | `LABEL_KNOWLEDGE_MAX_DOCS` | `5` |
 | `KNOWLEDGE_DEBUG` | `false` | `KNOWLEDGE_LOG_SIZE_WARNINGS` | `true` |
 
@@ -553,5 +621,6 @@ Quick reference table of all default values:
 - [Knowledge System](../features/knowledge-system.md) - Advanced knowledge configuration
 - [Reply Drafter Agent](../agents/reply-drafter.md) - Reply Drafter-specific configuration
 - [Email Summarizer Agent](../agents/email-summarizer.md) - Summarizer-specific configuration
+- [Todo Forwarder Agent](../agents/todo-forwarder.md) - Todo Forwarder-specific configuration
 - [Web App Dashboard](../features/web-app.md) - Web app configuration
 - [Multi-Account Deployment](../features/multi-account.md) - Per-account configuration
