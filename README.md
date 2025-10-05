@@ -144,18 +144,21 @@ Perfect for processing newsletters, long email threads, or multiple related emai
 
 **What it adds**: Automatic forwarding of emails labeled `todo` to external task management systems
 
-Perfect for integrating Gmail with task management tools like Todoist, Asana, or any email-based task creation system. Automatically forwards todo emails with full thread context, prevents duplicates, and optionally removes labels and archives.
+Perfect for integrating Gmail with task management tools like Todoist, Asana, or any email-based task creation system. Automatically forwards todo emails with full thread context and archives them on success. Failed forwards remain in inbox for automatic retry.
 
 **How it works**:
 - Immediate forwarding for newly-classified emails (onLabel hook)
 - Inbox-wide scanning for manually-labeled emails (postLabel hook)
 - Both hooks run in the hourly email processing cycle (no separate trigger needed)
+- Archive-based idempotency: only processes emails IN THE INBOX
 
 **Quick configuration example**:
 ```
 TODO_FORWARDER_ENABLED = true
 TODO_FORWARDER_EMAIL = mytasks@todoist.com
 ```
+
+Successfully forwarded emails are automatically archived (with `todo` label preserved).
 
 [Todo Forwarder Documentation →](docs/agents/todo-forwarder.md)
 

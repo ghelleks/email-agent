@@ -8,11 +8,12 @@ The Todo Forwarder agent:
 
 - **Monitors** emails labeled as `todo` by the core classification system
 - **Processes both new and existing emails** through dual-hook architecture (see below)
-- **Checks idempotency** using `todo_forwarded` label to prevent duplicate forwarding
+- **Ensures idempotency** by archiving forwarded emails - only processes emails IN THE INBOX
 - **Retrieves full thread context** including all messages in the conversation
 - **Formats emails as HTML** with clean presentation and metadata
 - **Forwards to configured destination** (task management email, personal inbox, etc.)
-- **Manages labels** optionally removing `todo` label and archiving after forward
+- **Archives on success** - archived emails (with todo label preserved) indicate "already forwarded"
+- **Automatic retry** - failed forwards remain in inbox for next hourly processing
 - **Runs automatically** via the hourly email processing trigger (no separate trigger needed)
 - **Respects dry-run mode** for safe testing before enabling
 
@@ -49,10 +50,11 @@ This agent operates automatically using the dual-hook pattern, requiring no manu
    - Add property: `TODO_FORWARDER_EMAIL` = `mytasks@todoist.com` (or your destination)
    - This is the only required configuration - agent won't forward without it
 
-3. **Customize behavior** (optional):
-   - `TODO_FORWARDER_REMOVE_TODO_LABEL=true` — Remove `todo` label after forwarding (default: true)
-   - `TODO_FORWARDER_ARCHIVE_AFTER_FORWARD=true` — Archive email after forwarding (default: false)
-   - See [Configuration Options](#configuration-options) section below
+3. **Understand the behavior**:
+   - Successfully forwarded emails are **automatically archived** (with `todo` label preserved)
+   - Failed forwards remain **in inbox** for automatic retry on next hourly run
+   - Archive status indicates "already forwarded" - simple and reliable
+   - No additional configuration needed - behavior is fixed for reliability
 
 4. **Test the agent**:
    - Enable debug mode: `TODO_FORWARDER_DEBUG=true`
@@ -65,7 +67,7 @@ This agent operates automatically using the dual-hook pattern, requiring no manu
    - Check destination email account for forwarded todos
    - Verify HTML formatting displays correctly
    - Confirm Gmail link in forwarded email works
-   - Check that `todo_forwarded` label is applied in Gmail
+   - Check that forwarded emails are archived in Gmail (still have `todo` label)
 
 ## How It Works
 
@@ -84,7 +86,7 @@ Runs during the core email classification pipeline:
 Runs after all classification/labeling is complete:
 - **Trigger**: After `Organizer.apply_()` finishes all labeling
 - **Timing**: Once per hourly email processing cycle
-- **Coverage**: ALL emails with `todo` label in inbox (without `todo_forwarded`)
+- **Coverage**: ALL emails with `todo` label that are IN THE INBOX (not archived)
 - **Use case**: Manually labeled emails, retries for failed forwards, emails labeled before agent was deployed
 
 **Why both hooks?**
@@ -99,12 +101,12 @@ The postLabel hook fills this gap by scanning the inbox for ALL `todo` emails an
 
 1. **Email Discovery**:
    - onLabel: Receives email context from classification pipeline
-   - postLabel: Searches inbox for `in:inbox label:todo -label:todo_forwarded`
+   - postLabel: Searches inbox for `in:inbox label:todo`
 
 2. **Idempotency Check**:
-   - Verifies email doesn't have `todo_forwarded` label
-   - Skips processing if already forwarded
-   - Prevents duplicate forwarding on manual re-labeling
+   - Only processes emails that are IN THE INBOX
+   - Archived emails (even with `todo` label) are already forwarded
+   - Archive status is the definitive "forwarded" indicator
 
 3. **Thread Retrieval**:
    - Fetches complete Gmail thread by ID
@@ -123,10 +125,10 @@ The postLabel hook fills this gap by scanning the inbox for ALL `todo` emails an
    - Subject line prefixed with "[Todo]"
    - Plain text fallback for non-HTML clients
 
-6. **Label Management**:
-   - Adds `todo_forwarded` label to mark as processed
-   - Optionally removes `todo` label (if `TODO_FORWARDER_REMOVE_TODO_LABEL=true`)
-   - Optionally archives email (if `TODO_FORWARDER_ARCHIVE_AFTER_FORWARD=true`)
+6. **Archive Management**:
+   - Archives email on successful forward (keeps `todo` label)
+   - Failed forwards remain in inbox for automatic retry
+   - Archive status indicates "already forwarded"
 
 7. **Logging**:
    - Records forward success/failure
@@ -135,23 +137,25 @@ The postLabel hook fills this gap by scanning the inbox for ALL `todo` emails an
 
 ### Idempotency Strategy
 
-The agent uses **label-based idempotency** to prevent duplicate forwarding:
+The agent uses **archive-based idempotency** to prevent duplicate forwarding:
 
 **Primary Mechanism**:
-- `todo_forwarded` label marks emails as processed
-- Both hooks check for this label before forwarding
-- Gmail search query excludes already-forwarded emails: `-label:todo_forwarded`
+- Only processes emails with `todo` label that are IN THE INBOX
+- Successfully forwarded emails are ARCHIVED (with `todo` label preserved)
+- Failed forwards remain IN INBOX for automatic retry on next run
+- Gmail search query: `in:inbox label:todo`
 
 **Benefits**:
-- Visual feedback in Gmail (you can see what's been forwarded)
-- No hidden UserProperties state
-- Simple recovery: remove label to retry forwarding
-- Consistent with label-synchronized agent state pattern (ADR-017)
+- Archive status is definitive "forwarded" indicator - no additional labels needed
+- Visual feedback in Gmail (inbox vs archived)
+- Simple recovery: move email back to inbox to re-forward
+- Failed forwards automatically retry without manual intervention
+- No label management overhead (no `todo_forwarded` label to create/track)
 
 **Edge Cases Handled**:
-- Manual re-labeling with `todo`: Skipped (already has `todo_forwarded`)
-- Failed forward: No label applied, will retry on next postLabel run
-- Label accidentally removed: Will re-forward on next postLabel run
+- Manual re-labeling with `todo` while archived: Skipped (not in inbox)
+- Failed forward: Stays in inbox, retries on next hourly run automatically
+- Email moved back to inbox: Will re-forward (intentional - user wants retry)
 
 ## Configuration Options
 
@@ -171,17 +175,7 @@ All configuration is managed via Apps Script Script Properties in the Apps Scrip
 |----------|---------|-------------|
 | `TODO_FORWARDER_ENABLED` | `true` | Enable/disable the agent entirely |
 
-### Label Management
-
-| Property | Default | Description |
-|----------|---------|-------------|
-| `TODO_FORWARDER_REMOVE_TODO_LABEL` | `true` | Remove `todo` label after successful forward |
-| `TODO_FORWARDER_ARCHIVE_AFTER_FORWARD` | `false` | Archive email after forwarding |
-
-**Workflow scenarios**:
-- **Clean Inbox**: `REMOVE_TODO_LABEL=true`, `ARCHIVE_AFTER_FORWARD=true` — Forward, clean up, archive
-- **Task Tracking Only**: `REMOVE_TODO_LABEL=true`, `ARCHIVE_AFTER_FORWARD=false` — Forward, remove label, keep in inbox
-- **Visual Reference**: `REMOVE_TODO_LABEL=false`, `ARCHIVE_AFTER_FORWARD=false` — Forward, keep all labels and inbox position
+**Note**: Successfully forwarded emails are automatically archived (with `todo` label preserved). This behavior is fixed for reliability and cannot be configured.
 
 ### Debugging Configuration
 
@@ -203,25 +197,21 @@ All configuration is managed via Apps Script Script Properties in the Apps Scrip
 TODO_FORWARDER_ENABLED = true
 TODO_FORWARDER_EMAIL = mytasks@todoist.com
 ```
-Forwards todos to Todoist, removes `todo` label, keeps emails in inbox.
+Forwards todos to Todoist, archives emails after successful forward (keeps `todo` label).
 
-### Example 2: Full Inbox Automation
+### Example 2: Asana Integration
 ```
 TODO_FORWARDER_ENABLED = true
 TODO_FORWARDER_EMAIL = tasks@asana.com
-TODO_FORWARDER_REMOVE_TODO_LABEL = true
-TODO_FORWARDER_ARCHIVE_AFTER_FORWARD = true
 ```
-Forwards todos to Asana, removes label, and archives emails for clean inbox.
+Forwards todos to Asana, archives emails after successful forward (keeps `todo` label).
 
 ### Example 3: Separate Todo Inbox
 ```
 TODO_FORWARDER_ENABLED = true
 TODO_FORWARDER_EMAIL = todos@myemaildomain.com
-TODO_FORWARDER_REMOVE_TODO_LABEL = false
-TODO_FORWARDER_ARCHIVE_AFTER_FORWARD = false
 ```
-Forwards todos to personal inbox, preserves all labels and Gmail location.
+Forwards todos to personal inbox, archives emails after successful forward (keeps `todo` label).
 
 ### Example 4: Testing Configuration
 ```
@@ -229,10 +219,8 @@ TODO_FORWARDER_ENABLED = true
 TODO_FORWARDER_EMAIL = test@example.com
 TODO_FORWARDER_DEBUG = true
 TODO_FORWARDER_DRY_RUN = true
-TODO_FORWARDER_REMOVE_TODO_LABEL = false
-TODO_FORWARDER_ARCHIVE_AFTER_FORWARD = false
 ```
-Tests agent behavior without forwarding or modifying emails.
+Tests agent behavior without forwarding or archiving emails.
 
 ## Forwarded Email Format
 
@@ -343,9 +331,9 @@ TODO_FORWARDER_EMAIL = todos@yourdomain.com
 - Confirm `TODO_FORWARDER_EMAIL` is set to valid email address
 - Check core labeling trigger is installed (`installTrigger`)
 
-**Check labels**:
+**Check inbox status**:
 - Verify emails have `todo` label applied
-- Confirm emails don't already have `todo_forwarded` label
+- Confirm emails are in inbox (not archived)
 - Manually label test email with `todo` and wait for next hourly run
 
 **Enable debugging**:
@@ -360,17 +348,17 @@ TODO_FORWARDER_DRY_RUN = true
 ### Duplicate Forwarding
 
 **Verify idempotency**:
-- Check emails for `todo_forwarded` label
-- If missing, labels may not be saving correctly
-- Review execution logs for label application errors
+- Check if emails are archived after forwarding
+- Archived emails should not be forwarded again
+- Review execution logs for archiving errors
 
-**Check for manual re-labeling**:
-- Removing and re-adding `todo` label should NOT forward again (idempotent)
-- If forwarding duplicates, check for `todo_forwarded` label removal
+**Check for manual actions**:
+- Moving archived email back to inbox will trigger re-forwarding (this is intentional)
+- Removing and re-adding `todo` label to archived email will NOT forward again (still archived)
 
-**Verify configuration**:
-- Ensure `TODO_FORWARDER_REMOVE_TODO_LABEL` setting matches your workflow
-- If `true`, `todo` label will be removed but `todo_forwarded` stays
+**Verify inbox filtering**:
+- Agent only processes emails IN THE INBOX with `todo` label
+- Archive status is the definitive "already forwarded" indicator
 
 ### Destination Not Receiving Emails
 
@@ -464,26 +452,20 @@ Current implementation supports one destination. For multiple:
 **Example: Complete Inbox Zero**
 ```
 TODO_FORWARDER_EMAIL = tasks@asana.com
-TODO_FORWARDER_REMOVE_TODO_LABEL = true
-TODO_FORWARDER_ARCHIVE_AFTER_FORWARD = true
 ```
-All todos automatically forwarded, labeled, and archived.
+All todos automatically forwarded and archived. Archived todos still have `todo` label for filtering.
 
-**Example: Todo Reference Preservation**
+**Example: Todo Reference via Archive**
 ```
 TODO_FORWARDER_EMAIL = mytasks@todoist.com
-TODO_FORWARDER_REMOVE_TODO_LABEL = false
-TODO_FORWARDER_ARCHIVE_AFTER_FORWARD = false
 ```
-Todos forwarded but preserved in Gmail for reference.
+Todos forwarded and archived. Access via Gmail's All Mail or by filtering for `label:todo`.
 
 **Example: Team Task Distribution**
 ```
 TODO_FORWARDER_EMAIL = team-tasks@company.com
-TODO_FORWARDER_REMOVE_TODO_LABEL = true
-TODO_FORWARDER_ARCHIVE_AFTER_FORWARD = false
 ```
-Todos forwarded to team, label removed, email stays in inbox for visibility.
+Todos forwarded to team and archived. Failed forwards remain in inbox for retry.
 
 ## Architecture Details
 
@@ -496,10 +478,10 @@ The Todo Forwarder follows ADR-011 self-contained architecture:
 - PropertiesService keys prefixed with `TODO_FORWARDER_`
 - No modifications to core `Config.gs` required
 
-**Label Management**:
-- `ensureTodoForwarderLabels_()` — Creates `todo_forwarded` label
-- Agent manages own label lifecycle
-- No core system label changes needed
+**Archive Management**:
+- `GmailApp.moveThreadToArchive()` — Archives successfully forwarded emails
+- Preserves `todo` label for filtering archived todos
+- No additional label creation needed
 
 **Self-Registration**:
 - Uses `AGENT_MODULES.push()` pattern
@@ -532,15 +514,15 @@ Following ADR-018 dual-hook architecture:
 Uses established patterns from ADR-012:
 
 **Gmail Operations**:
-- `GmailApp.search()` — Inbox scanning with label filters
+- `GmailApp.search()` — Inbox scanning with query: `in:inbox label:todo`
 - `GmailApp.getThreadById()` — Thread retrieval
 - `GmailApp.sendEmail()` — HTML email forwarding
-- Label management via `thread.addLabel()` / `removeLabel()`
+- `GmailApp.moveThreadToArchive()` — Archive on successful forward
 
 **Future Generic Functions** (potential):
 - `sendFormattedEmail_()` — Reusable HTML email sending
 - `formatEmailThread_()` — Standardized thread formatting
-- `trackAgentState_()` — Generic label-based state tracking
+- `archiveEmailsByIds_()` — Batch email archiving (already in GmailService.gs)
 
 ## Performance Characteristics
 
@@ -550,10 +532,10 @@ Uses established patterns from ADR-012:
 - **Typical overhead**: <10 seconds for <5 unforwarded emails per hourly run
 
 ### Gmail API Quota Usage
-- **Search**: 1 query per hourly execution (`in:inbox label:todo -label:todo_forwarded`)
+- **Search**: 1 query per hourly execution (`in:inbox label:todo`)
 - **Read**: 1 thread retrieval per forwarded email
 - **Send**: 1 email send per forwarded email (daily quota limits apply)
-- **Labels**: 2-3 label operations per forwarded email
+- **Archive**: 1 archive operation per successfully forwarded email
 
 ### Quota Limits
 - **Consumer Gmail**: 100 emails/day send quota

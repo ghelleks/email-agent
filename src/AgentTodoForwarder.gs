@@ -3,20 +3,27 @@
  *
  * This agent implements automated forwarding for emails labeled "todo":
  * - Forwards todo emails to a configured email address
- * - Tracks forwarded emails to ensure idempotency
+ * - Archives successfully forwarded emails (keeps todo label)
+ * - Leaves failed forwards in inbox for retry
  * - Supports both immediate forwarding (onLabel) and inbox scanning (postLabel)
- * - Uses label transitions to mark emails as forwarded
  *
  * Dual-Hook Architecture:
  * 1. onLabel: Runs during classification (immediate forward for newly-classified emails)
  * 2. postLabel: Runs after all labeling (scans inbox for manually-labeled emails)
  *
+ * Idempotency Strategy:
+ * - Only processes emails with "todo" label that are IN THE INBOX
+ * - Successfully forwarded emails are archived (with todo label preserved)
+ * - Failed forwards remain in inbox for automatic retry on next run
+ * - Archive status indicates "already forwarded" - simple and reliable
+ *
  * Features:
  * - Self-contained: manages own config without core Config.gs changes
- * - Idempotent: tracks forwarded emails to prevent duplicates
+ * - Idempotent: archive-based tracking prevents duplicates
  * - Thread-aware: forwards complete email threads with context
  * - Dual-mode: immediate + inbox scanning without separate trigger
  * - Full error handling and dry-run support
+ * - Automatic retry for failed forwards
  */
 
 // ============================================================================
@@ -36,27 +43,10 @@ function getTodoForwarderConfig_() {
     // Forwarding configuration
     TODO_FORWARDER_EMAIL: props.getProperty('TODO_FORWARDER_EMAIL'),
 
-    // Label management
-    TODO_FORWARDER_REMOVE_TODO_LABEL: (props.getProperty('TODO_FORWARDER_REMOVE_TODO_LABEL') || 'true').toLowerCase() === 'true',
-    TODO_FORWARDER_ARCHIVE_AFTER_FORWARD: (props.getProperty('TODO_FORWARDER_ARCHIVE_AFTER_FORWARD') || 'false').toLowerCase() === 'true',
-
     // Debugging and testing
     TODO_FORWARDER_DEBUG: (props.getProperty('TODO_FORWARDER_DEBUG') || 'false').toLowerCase() === 'true',
     TODO_FORWARDER_DRY_RUN: (props.getProperty('TODO_FORWARDER_DRY_RUN') || 'false').toLowerCase() === 'true'
   };
-}
-
-// ============================================================================
-// Label Management (Self-Contained)
-// ============================================================================
-
-/**
- * Ensure agent-specific labels exist
- * Creates 'todo_forwarded' label to track processed emails
- */
-function ensureTodoForwarderLabels_() {
-  const labelName = 'todo_forwarded';
-  return GmailApp.getUserLabelByName(labelName) || GmailApp.createLabel(labelName);
 }
 
 // ============================================================================
@@ -65,20 +55,20 @@ function ensureTodoForwarderLabels_() {
 
 /**
  * Check if email has already been forwarded
- * Returns true if email has the 'todo_forwarded' label
+ * Returns true if email is archived (indicating successful forward)
+ *
+ * Archive-based idempotency strategy:
+ * - Successfully forwarded emails are archived with 'todo' label
+ * - Only inbox emails with 'todo' label are processed
+ * - Simple, reliable, and requires no additional labels
  *
  * @param {GmailThread} thread - Gmail thread object
- * @return {boolean} True if email has been forwarded
+ * @return {boolean} True if email has been forwarded (is archived)
  */
 function isEmailForwarded_(thread) {
   try {
-    const labels = thread.getLabels();
-    for (let i = 0; i < labels.length; i++) {
-      if (labels[i].getName() === 'todo_forwarded') {
-        return true;
-      }
-    }
-    return false;
+    // If thread is not in inbox, it's been archived (and thus forwarded)
+    return !thread.isInInbox();
   } catch (error) {
     Logger.log('Error checking forwarded status: ' + error.toString());
     return false;
@@ -269,53 +259,36 @@ function processTodoForward_(ctx) {
 
     // Check for dry-run mode
     if (ctx.dryRun || config.TODO_FORWARDER_DRY_RUN) {
-      ctx.log('DRY RUN - Would forward email to ' + config.TODO_FORWARDER_EMAIL);
-      return { status: 'ok', info: 'dry-run mode - email would be forwarded' };
+      ctx.log('DRY RUN - Would forward email to ' + config.TODO_FORWARDER_EMAIL + ' and archive');
+      return { status: 'ok', info: 'dry-run mode - email would be forwarded and archived' };
     }
 
-    // Ensure labels exist
-    const forwardedLabel = ensureTodoForwarderLabels_();
-
-    // Check if already forwarded (idempotent)
+    // Check if already forwarded (idempotent via archive status)
     if (isEmailForwarded_(ctx.thread)) {
-      ctx.log('Email already forwarded, skipping');
-      return { status: 'skip', info: 'already forwarded' };
+      ctx.log('Email already forwarded (archived), skipping');
+      return { status: 'skip', info: 'already forwarded (archived)' };
     }
 
     // Forward the email
     const forwardResult = forwardEmailThread_(ctx.threadId, config.TODO_FORWARDER_EMAIL);
 
     if (!forwardResult.success) {
-      ctx.log('Forward failed: ' + forwardResult.error);
+      // Leave in inbox with 'todo' label for retry on next run
+      ctx.log('Forward failed: ' + forwardResult.error + ' - email left in inbox for retry');
       return { status: 'error', info: forwardResult.error };
     }
 
-    // Mark as forwarded
-    ctx.thread.addLabel(forwardedLabel);
+    // Archive on successful forward (keeps 'todo' label, marks as processed)
+    ctx.thread.moveToArchive();
 
-    // Remove todo label if configured
-    if (config.TODO_FORWARDER_REMOVE_TODO_LABEL) {
-      const todoLabel = GmailApp.getUserLabelByName('todo');
-      if (todoLabel) {
-        ctx.thread.removeLabel(todoLabel);
-        if (config.TODO_FORWARDER_DEBUG) {
-          ctx.log('Removed todo label after forwarding');
-        }
-      }
-    }
-
-    // Archive if configured
-    if (config.TODO_FORWARDER_ARCHIVE_AFTER_FORWARD) {
-      ctx.thread.moveToArchive();
-      if (config.TODO_FORWARDER_DEBUG) {
-        ctx.log('Archived email after forwarding');
-      }
+    if (config.TODO_FORWARDER_DEBUG) {
+      ctx.log('Email forwarded and archived successfully');
     }
 
     ctx.log('Email forwarded successfully to ' + config.TODO_FORWARDER_EMAIL);
     return {
       status: 'ok',
-      info: 'email forwarded to ' + config.TODO_FORWARDER_EMAIL
+      info: 'email forwarded and archived'
     };
 
   } catch (error) {
@@ -335,8 +308,13 @@ function processTodoForward_(ctx) {
  * - Emails labeled before agent was deployed
  * - Failed forwards that need retry
  *
+ * Archive-based idempotency:
+ * - Only processes emails IN THE INBOX with 'todo' label
+ * - Successfully forwarded emails are archived (automatic deduplication)
+ * - Failed forwards remain in inbox for automatic retry
+ *
  * This complements the onLabel handler which runs during classification.
- * No parameters - scans inbox independently and uses idempotency to skip processed emails.
+ * No parameters - scans inbox independently and uses archive status for idempotency.
  */
 function todoForwarderPostLabelScan_() {
   try {
@@ -356,11 +334,9 @@ function todoForwarderPostLabelScan_() {
       Logger.log('Todo Forwarder postLabel: Starting inbox scan');
     }
 
-    // Ensure labels exist
-    const forwardedLabel = ensureTodoForwarderLabels_();
-
-    // Find all emails with "todo" label that haven't been forwarded
-    const query = 'in:inbox label:todo -label:todo_forwarded';
+    // Find all emails with "todo" label that are IN THE INBOX (not archived)
+    // Archive status indicates already forwarded - simple and reliable
+    const query = 'in:inbox label:todo';
     const threads = GmailApp.search(query);
 
     if (threads.length === 0) {
@@ -383,44 +359,32 @@ function todoForwarderPostLabelScan_() {
       const threadId = thread.getId();
 
       try {
-        // Double-check not already forwarded (idempotency)
+        // Double-check still in inbox (idempotency via archive status)
         if (isEmailForwarded_(thread)) {
           skipped++;
           if (config.TODO_FORWARDER_DEBUG) {
-            Logger.log(`Todo Forwarder postLabel: Skipping thread ${threadId} (already forwarded)`);
+            Logger.log(`Todo Forwarder postLabel: Skipping thread ${threadId} (already forwarded/archived)`);
           }
           continue;
         }
 
         // Forward email
         if (config.TODO_FORWARDER_DRY_RUN) {
-          Logger.log(`Todo Forwarder postLabel: DRY RUN - Would forward thread ${threadId}`);
+          Logger.log(`Todo Forwarder postLabel: DRY RUN - Would forward and archive thread ${threadId}`);
         } else {
           const forwardResult = forwardEmailThread_(threadId, config.TODO_FORWARDER_EMAIL);
 
           if (!forwardResult.success) {
-            Logger.log(`Todo Forwarder postLabel: Failed to forward thread ${threadId} - ${forwardResult.error}`);
+            // Leave in inbox with 'todo' label for retry on next run
+            Logger.log(`Todo Forwarder postLabel: Failed to forward thread ${threadId} - ${forwardResult.error} - left in inbox for retry`);
             errors++;
             continue;
           }
 
-          // Mark as forwarded
-          thread.addLabel(forwardedLabel);
+          // Archive on successful forward (keeps 'todo' label, marks as processed)
+          thread.moveToArchive();
 
-          // Remove todo label if configured
-          if (config.TODO_FORWARDER_REMOVE_TODO_LABEL) {
-            const todoLabel = GmailApp.getUserLabelByName('todo');
-            if (todoLabel) {
-              thread.removeLabel(todoLabel);
-            }
-          }
-
-          // Archive if configured
-          if (config.TODO_FORWARDER_ARCHIVE_AFTER_FORWARD) {
-            thread.moveToArchive();
-          }
-
-          Logger.log(`Todo Forwarder postLabel: Forwarded thread ${threadId} to ${config.TODO_FORWARDER_EMAIL}`);
+          Logger.log(`Todo Forwarder postLabel: Forwarded and archived thread ${threadId} to ${config.TODO_FORWARDER_EMAIL}`);
         }
 
         processed++;

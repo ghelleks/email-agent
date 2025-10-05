@@ -43,6 +43,7 @@ All ADRs in this project follow a consistent format defined in [template.md](tem
 - [ADR-020: Todo Forwarder Agent Implementation](020-todo-forwarder-agent.md)
 - [ADR-021: Remove Internal Budget Management System](021-remove-internal-budget-management.md) (Supersedes ADR-005)
 - [ADR-022: Agent-Owned Prompt Building](022-agent-owned-prompts.md) - Agent-owned prompt functions for complete self-containment
+- [ADR-023: Archive-Based Idempotency for Todo Forwarder](023-archive-based-idempotency.md) ⚠️ Breaking Change
 
 ## Status Legend
 

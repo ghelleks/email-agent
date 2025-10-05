@@ -242,12 +242,7 @@ Both hooks run within the hourly email processing cycle. **No separate trigger r
 | `TODO_FORWARDER_ENABLED` | `true` | Enable/disable the Todo Forwarder agent (both hooks) |
 | `TODO_FORWARDER_EMAIL` | None | Email address to forward todos to (required - agent disabled if not set) |
 
-### Label Management Configuration
-
-| Property | Default | Description |
-|----------|---------|-------------|
-| `TODO_FORWARDER_REMOVE_TODO_LABEL` | `true` | Remove 'todo' label after successful forwarding |
-| `TODO_FORWARDER_ARCHIVE_AFTER_FORWARD` | `false` | Archive email after forwarding |
+**Archive Behavior**: Successfully forwarded emails are automatically archived (with `todo` label preserved). This behavior is fixed for reliability and cannot be configured.
 
 ### Debugging Configuration
 
@@ -263,22 +258,21 @@ Both hooks run within the hourly email processing cycle. **No separate trigger r
 TODO_FORWARDER_ENABLED = true
 TODO_FORWARDER_EMAIL = mytasks@todoist.com
 ```
+Successfully forwarded emails are automatically archived (with `todo` label preserved).
 
-**Full workflow automation** (forward, remove label, archive):
+**Asana integration**:
 ```
 TODO_FORWARDER_ENABLED = true
 TODO_FORWARDER_EMAIL = tasks@asana.com
-TODO_FORWARDER_REMOVE_TODO_LABEL = true
-TODO_FORWARDER_ARCHIVE_AFTER_FORWARD = true
 ```
+Successfully forwarded emails are automatically archived (with `todo` label preserved).
 
-**Keep emails in inbox** (forward only, preserve labels):
+**Personal inbox integration**:
 ```
 TODO_FORWARDER_ENABLED = true
 TODO_FORWARDER_EMAIL = todo@myapp.com
-TODO_FORWARDER_REMOVE_TODO_LABEL = false
-TODO_FORWARDER_ARCHIVE_AFTER_FORWARD = false
 ```
+Successfully forwarded emails are automatically archived (with `todo` label preserved).
 
 **Debug mode**:
 ```
@@ -609,7 +603,6 @@ Quick reference table of all default values:
 | `REPLY_DRAFTER_ENABLED` | `true` | `REPLY_DRAFTER_KNOWLEDGE_MAX_DOCS` | `5` |
 | `REPLY_DRAFTER_DEBUG` | `false` | `REPLY_DRAFTER_DRY_RUN` | `false` |
 | `TODO_FORWARDER_ENABLED` | `true` | `TODO_FORWARDER_EMAIL` | None |
-| `TODO_FORWARDER_REMOVE_TODO_LABEL` | `true` | `TODO_FORWARDER_ARCHIVE_AFTER_FORWARD` | `false` |
 | `TODO_FORWARDER_DEBUG` | `false` | `TODO_FORWARDER_DRY_RUN` | `false` |
 | `KNOWLEDGE_CACHE_DURATION_MINUTES` | `30` | `LABEL_KNOWLEDGE_MAX_DOCS` | `5` |
 | `KNOWLEDGE_DEBUG` | `false` | `KNOWLEDGE_LOG_SIZE_WARNINGS` | `true` |

@@ -187,10 +187,14 @@ This dual-hook architecture ensures todos are forwarded for both newly-classifie
 
 - `TODO_FORWARDER_ENABLED`: Enable/disable Todo Forwarder agent (default: true)
 - `TODO_FORWARDER_EMAIL`: Email address to forward todos to (required - agent disabled if not set)
-- `TODO_FORWARDER_REMOVE_TODO_LABEL`: Remove 'todo' label after forwarding (default: true)
-- `TODO_FORWARDER_ARCHIVE_AFTER_FORWARD`: Archive email after forwarding (default: false)
 - `TODO_FORWARDER_DEBUG`: Enable detailed logging for the agent (default: false)
 - `TODO_FORWARDER_DRY_RUN`: Test mode for the agent (default: false)
+
+**Archive-Based Idempotency:**
+- Successfully forwarded emails are **automatically archived** (with `todo` label preserved)
+- Failed forwards remain **in inbox** for automatic retry on next hourly run
+- Only processes emails with `todo` label that are **IN THE INBOX**
+- No additional labels needed - archive status indicates "already forwarded"
 
 #### KnowledgeService Configuration
 The KnowledgeService provides unified knowledge management for AI prompts by fetching Google Drive documents.
@@ -609,8 +613,9 @@ The system uses exactly four core labels (ADR-003):
 #### Agent-Managed Labels
 Self-contained agents may create and manage additional labels:
 - `summarized`: Emails processed by the Email Summarizer agent (archived)
-- `todo_forwarded`: Emails forwarded by the Todo Forwarder agent (idempotency tracking)
 - Custom agent labels as needed (agents manage their own label lifecycle)
+
+**Note**: The Todo Forwarder agent no longer creates additional labels - it uses archive status for idempotency tracking.
 
 **Note**: The Reply Drafter agent does not create additional labels - it operates solely on emails labeled `reply_needed` by the core classification system.
 
@@ -745,10 +750,10 @@ Refer to `docs/adr/` for complete context:
 - **Solution**: For manually labeled emails, postLabel hook will process them on next hourly run
 
 **🔍 Problem**: Todo Forwarder forwarding duplicate emails
-- **Solution**: Check for `todo_forwarded` label on emails (should prevent duplicates)
-- **Solution**: Verify labels are applied correctly (both `todo` and `todo_forwarded` should exist)
+- **Solution**: Check if emails are archived after forwarding (archived emails won't be forwarded again)
+- **Solution**: Verify archive operation succeeded (check execution logs)
 - **Solution**: Review execution logs for idempotency checks
-- **Solution**: If duplicates persist, remove `todo_forwarded` labels and let system recreate them
+- **Solution**: Emails in inbox with `todo` label will be forwarded - move to archive to prevent retry
 
 **🔍 Problem**: Todo Forwarder destination not receiving emails
 - **Solution**: Verify `TODO_FORWARDER_EMAIL` is correct email address format

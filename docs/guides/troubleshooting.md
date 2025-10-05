@@ -317,6 +317,7 @@ See also: [Todo Forwarder Agent Documentation](../agents/todo-forwarder.md)
 - Destination email not configured
 - Agent disabled
 - Core labeling trigger not installed
+- Emails already archived
 - Configuration errors
 
 **Solutions**:
@@ -332,20 +333,25 @@ This is required - agent won't forward without it.
 TODO_FORWARDER_ENABLED = true
 ```
 
-**Solution 3**: Check core labeling trigger is installed:
+**Solution 3**: Check emails are in inbox (not archived):
+- Agent only processes emails with `todo` label that are IN THE INBOX
+- Archived emails (even with `todo` label) are already forwarded
+- Move email back to inbox to retry forwarding
+
+**Solution 4**: Check core labeling trigger is installed:
 - Run `installTrigger` function in Apps Script editor
 - Verify trigger exists in "Triggers" section
 - Wait for next hourly execution
 
-**Solution 4**: Enable debug mode to diagnose:
+**Solution 5**: Enable debug mode to diagnose:
 ```
 TODO_FORWARDER_DEBUG = true
 TODO_FORWARDER_DRY_RUN = true
 ```
 Check execution logs for "Todo Forwarder" messages.
 
-**Solution 5**: Manually test with labeled email:
-- Label an email with `todo` manually
+**Solution 6**: Manually test with labeled email:
+- Label an email with `todo` manually (ensure it's in inbox)
 - Wait for next hourly trigger execution
 - Check execution logs for postLabel hook processing
 
@@ -354,31 +360,32 @@ Check execution logs for "Todo Forwarder" messages.
 **Symptoms**: Same email forwarded multiple times.
 
 **Causes**:
-- `todo_forwarded` label not being applied
-- Labels manually removed and re-added
-- Idempotency check failing
+- Archive operation failing
+- Email moved back to inbox manually
+- Archive status not properly set
 
 **Solutions**:
 
-**Solution 1**: Verify `todo_forwarded` label exists:
-- Check Gmail for `todo_forwarded` label on processed emails
-- If missing, check execution logs for label errors
+**Solution 1**: Verify archive operation succeeded:
+- Check if forwarded emails are archived in Gmail
+- If still in inbox, archive operation may have failed
+- Review execution logs for archive errors
 
 **Solution 2**: Review idempotency logic:
 ```
 TODO_FORWARDER_DEBUG = true
 ```
-Check logs for "already forwarded" skip messages.
+Check logs for "already forwarded" (archived) skip messages.
 
-**Solution 3**: Reset forwarded state:
-- Remove `todo_forwarded` labels if corrupted
-- Let system recreate them on next run
-- Verify labels applied correctly
+**Solution 3**: Check for manual actions:
+- Moving archived email back to inbox will trigger re-forwarding (this is intentional)
+- Removing and re-adding `todo` label to archived email will NOT forward again (still archived)
+- Only emails IN THE INBOX with `todo` label are forwarded
 
-**Solution 4**: Check for manual label manipulation:
-- Removing `todo` and re-adding triggers onLabel hook
-- Email should still be skipped if has `todo_forwarded`
-- If not, investigate label state
+**Solution 4**: Verify inbox filtering:
+- Agent only processes emails with query: `in:inbox label:todo`
+- Archived emails are excluded automatically
+- If seeing duplicates, verify archive status in Gmail
 
 ### Destination not receiving forwarded emails
 
@@ -483,13 +490,14 @@ Check logs for slow thread retrievals or sends.
 
 **Solution 4**: Review Gmail API quota:
 - Monitor quota usage at Google Cloud Console
-- Each forward uses: 1 read + 1 send + 2-3 label operations
+- Each forward uses: 1 read + 1 send + 1 archive operation
 - Request quota increase if needed
 
 **Solution 5**: Optimize postLabel scanning:
-- Ensure `todo_forwarded` labels applied correctly
-- Search query filters efficiently: `-label:todo_forwarded`
-- Clean up old todos to reduce inbox size
+- Ensure archive operations complete successfully
+- Search query filters efficiently: `in:inbox label:todo`
+- Archive old forwarded todos to reduce inbox size
+- Failed forwards in inbox will retry automatically on next run
 
 ## Multi-Account Issues
 
