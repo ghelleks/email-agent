@@ -33,6 +33,11 @@ clasp login --no-localhost
 
 This connects the command-line tool to your Google account.
 
+**Important**: After logging in, you must enable the Apps Script API:
+1. Visit https://script.google.com/home/usersettings
+2. Turn on "Google Apps Script API"
+3. Wait a few minutes for the change to propagate
+
 ### Step 2: Get a Gemini API Key
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
@@ -49,14 +54,14 @@ This connects the command-line tool to your Google account.
 git clone https://github.com/yourusername/email-agent.git
 cd email-agent
 
-# Create the Apps Script project
-npm run create
+# Create the Apps Script project (with source files in src/ directory)
+clasp create --title "Gmail Labeler" --type standalone --rootDir ./src
 
 # Upload code to Google's cloud
-npm run push
+clasp push
 
 # Open the Apps Script editor
-npm run open
+clasp open-script
 ```
 
 ### Step 4: Configure Settings
@@ -75,15 +80,16 @@ In the Apps Script editor that just opened:
 
 ### Step 5: Test It
 
-1. In the Apps Script editor, select **`run`** from the function dropdown
-2. Click the **"Run"** button (▶️)
-3. **Authorize the script** when prompted:
+1. In the Apps Script editor, click **`Main.gs`** in the Files list on the left
+2. Select **`run`** from the function dropdown at the top
+3. Click the **"Run"** button (▶️)
+4. **Authorize the script** when prompted:
    - Click "Review permissions"
    - Choose your Google account
    - Click "Advanced" → "Go to Gmail Labeler (unsafe)"
    - Click "Allow"
-4. Check the **"Execution log"** at the bottom for results
-5. Check your **Gmail** — you should see new labels applied to emails
+5. Check the **"Execution log"** at the bottom for results
+6. Check your **Gmail** — you should see new labels applied to emails
 
 **Testing tip**: Set `DRY_RUN=true` to analyze emails without actually applying labels.
 
