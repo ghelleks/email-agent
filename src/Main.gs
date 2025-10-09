@@ -73,7 +73,7 @@ function run() {
 
 function installTrigger() {
   // Use shared utility for trigger management
-  const result = createTimeTrigger_('run', { type: 'hourly', interval: 1 });
+  const result = createTimeTrigger_('run', { type: 'hours', interval: 1 });
   if (!result.success) {
     console.log('Failed to install trigger: ' + result.error);
   }
