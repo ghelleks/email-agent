@@ -373,6 +373,63 @@ function archiveEmailsByIds_(emailIds) {
 }
 
 /**
+ * Mark emails as read by their IDs
+ * Generic function for agents to mark processed emails as read
+ * Returns: { success: boolean, marked: number, errors?: array, message?: string }
+ */
+function markEmailsAsRead_(emailIds) {
+  try {
+    if (!emailIds || emailIds.length === 0) {
+      return {
+        success: false,
+        error: 'No email IDs provided for marking as read'
+      };
+    }
+
+    let marked = 0;
+    const errors = [];
+
+    for (let i = 0; i < emailIds.length; i++) {
+      try {
+        const message = GmailApp.getMessageById(emailIds[i]);
+        const thread = message.getThread();
+        thread.markRead();
+        marked++;
+
+      } catch (messageError) {
+        errors.push(`Failed to mark email ID ${emailIds[i]} as read: ${messageError.toString()}`);
+        Logger.log(`markEmailsAsRead_ error for ID ${emailIds[i]}: ${messageError.toString()}`);
+      }
+    }
+
+    if (errors.length > 0 && marked === 0) {
+      return {
+        success: false,
+        error: `Failed to mark any emails as read. Errors: ${errors.join('; ')}`
+      };
+    }
+
+    const message = marked === emailIds.length
+      ? `Successfully marked ${marked} email threads as read`
+      : `Marked ${marked} of ${emailIds.length} emails as read. Some errors occurred.`;
+
+    return {
+      success: true,
+      marked: marked,
+      message: message,
+      errors: errors.length > 0 ? errors : undefined
+    };
+
+  } catch (error) {
+    Logger.log(`markEmailsAsRead_ error: ${error.toString()}`);
+    return {
+      success: false,
+      error: `Failed to mark emails as read: ${error.toString()}`
+    };
+  }
+}
+
+/**
  * Send formatted HTML email with source references
  * Generic function for agents to send notifications and summaries
  * Returns: { success: boolean, messageId?: string, error?: string }

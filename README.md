@@ -144,6 +144,8 @@ REPLY_DRAFTER_INSTRUCTIONS_URL = https://docs.google.com/document/d/YOUR_DOC_ID/
 
 Perfect for processing newsletters, long email threads, or multiple related emails into digestible summaries delivered to your inbox.
 
+**NEW (Issue #46)**: Support for custom labels - generate separate daily summaries for any labels you specify (e.g., "Project1", "Init2", "CustomerFeedback"). Each custom label gets its own summary email with configurable read/archive behavior.
+
 [Email Summarizer Documentation →](docs/agents/email-summarizer.md)
 
 ### Todo Forwarder Agent

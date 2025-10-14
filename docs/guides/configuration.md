@@ -126,6 +126,16 @@ Settings for the [Email Summarizer Agent](../agents/email-summarizer.md).
 | `SUMMARIZER_MAX_EMAILS_PER_SUMMARY` | `50` | Maximum emails to process per summary |
 | `SUMMARIZER_ARCHIVE_ON_LABEL` | `true` | Archive emails immediately when `summarize` label is applied |
 
+### Custom Label Summaries (Issue #46)
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `SUMMARIZER_CUSTOM_LABELS` | *(empty)* | Comma-separated list of custom labels to summarize (e.g., "Project1,Init2,Foo") |
+| `MARK_CUSTOM_LABELS_AS_READ` | `false` | Mark custom label emails as read after summarization |
+| `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL` | `false` | Archive custom label emails immediately when label is applied |
+
+**Behavior differences**: Default `summarize` label removes the label after processing, while custom labels are preserved. Custom labels have independent read/archive configuration.
+
 ### Debugging Configuration
 
 | Property | Default | Description |
@@ -153,6 +163,15 @@ SUMMARIZER_ENABLED = true
 SUMMARIZER_MAX_AGE_DAYS = 14
 SUMMARIZER_MAX_EMAILS_PER_SUMMARY = 100
 ```
+
+**Custom label summaries** (Issue #46):
+```
+SUMMARIZER_ENABLED = true
+SUMMARIZER_CUSTOM_LABELS = Project1,Init2,CustomerFeedback
+MARK_CUSTOM_LABELS_AS_READ = true
+CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL = false
+```
+This generates 4 separate daily summaries: default `summarize` + `Project1` + `Init2` + `CustomerFeedback`. Custom label emails stay in inbox with their labels intact and are marked as read after summarization.
 
 **Debug mode**:
 ```
@@ -372,6 +391,27 @@ SUMMARIZER_ARCHIVE_ON_LABEL = true
 # Web App
 WEBAPP_ENABLED = true
 ```
+
+### Scenario 3a: Email Summarizer with Custom Labels (Issue #46)
+
+**Goal**: Separate daily summaries for different projects/categories.
+
+```
+# Core
+GEMINI_API_KEY = AIzaSyC-abc123...
+
+# Email Summarizer
+SUMMARIZER_ENABLED = true
+SUMMARIZER_DESTINATION_EMAIL = you@example.com
+SUMMARIZER_ARCHIVE_ON_LABEL = true
+
+# Custom Label Summaries
+SUMMARIZER_CUSTOM_LABELS = ProjectAlpha,ProjectBeta,CustomerFeedback
+MARK_CUSTOM_LABELS_AS_READ = true
+CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL = false
+```
+
+This generates 4 separate daily summaries. Custom label emails stay in inbox with their labels for ongoing tracking.
 
 ### Scenario 4: High Volume Inbox
 
@@ -599,6 +639,8 @@ Quick reference table of all default values:
 | `DEFAULT_FALLBACK_LABEL` | `review` | `SUMMARIZER_ENABLED` | `true` |
 | `DRY_RUN` | `false` | `SUMMARIZER_DEBUG` | `false` |
 | `DEBUG` | `false` | `SUMMARIZER_DRY_RUN` | `false` |
+| `SUMMARIZER_CUSTOM_LABELS` | *(empty)* | `MARK_CUSTOM_LABELS_AS_READ` | `false` |
+| `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL` | `false` |
 | `WEBAPP_ENABLED` | `true` | `WEBAPP_MAX_EMAILS_PER_SUMMARY` | `50` |
 | `REPLY_DRAFTER_ENABLED` | `true` | `REPLY_DRAFTER_KNOWLEDGE_MAX_DOCS` | `5` |
 | `REPLY_DRAFTER_DEBUG` | `false` | `REPLY_DRAFTER_DRY_RUN` | `false` |

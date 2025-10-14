@@ -48,6 +48,11 @@ function getSummarizerConfig_() {
     SUMMARIZER_KNOWLEDGE_FOLDER_URL: props.getProperty('SUMMARIZER_KNOWLEDGE_FOLDER_URL'),
     SUMMARIZER_KNOWLEDGE_MAX_DOCS: parseInt(props.getProperty('SUMMARIZER_KNOWLEDGE_MAX_DOCS') || '5', 10),
 
+    // Custom label support (Issue #46)
+    SUMMARIZER_CUSTOM_LABELS: props.getProperty('SUMMARIZER_CUSTOM_LABELS') || '', // Comma-separated list
+    MARK_CUSTOM_LABELS_AS_READ: (props.getProperty('MARK_CUSTOM_LABELS_AS_READ') || 'false').toLowerCase() === 'true',
+    CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL: (props.getProperty('CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL') || 'false').toLowerCase() === 'true',
+
     // Debugging and testing
     SUMMARIZER_DEBUG: (props.getProperty('SUMMARIZER_DEBUG') || 'false').toLowerCase() === 'true',
     SUMMARIZER_DRY_RUN: (props.getProperty('SUMMARIZER_DRY_RUN') || 'false').toLowerCase() === 'true'
@@ -67,6 +72,24 @@ function ensureSummarizedLabel_() {
   return GmailApp.getUserLabelByName(labelName) || GmailApp.createLabel(labelName);
 }
 
+/**
+ * Parse custom labels from configuration
+ * Returns array of label names, or empty array if none configured
+ */
+function parseCustomLabels_() {
+  const config = getSummarizerConfig_();
+  const customLabelsStr = config.SUMMARIZER_CUSTOM_LABELS || '';
+
+  if (!customLabelsStr.trim()) {
+    return [];
+  }
+
+  // Split by comma and trim whitespace
+  return customLabelsStr.split(',')
+    .map(label => label.trim())
+    .filter(label => label.length > 0);
+}
+
 // ============================================================================
 // Email Processing Logic
 // ============================================================================
@@ -74,13 +97,15 @@ function ensureSummarizedLabel_() {
 /**
  * Find emails for summarization using generic service layer
  * Returns structured email data compatible with existing AI services
+ * @param {string} labelName - Label to search for (defaults to 'summarize')
  */
-function findEmailsForSummary_() {
+function findEmailsForSummary_(labelName) {
   const config = getSummarizerConfig_();
+  const label = labelName || 'summarize';
 
   // Use generic service function for email finding
   return findEmailsByLabelWithAge_(
-    'summarize',
+    label,
     config.SUMMARIZER_MAX_AGE_DAYS,
     config.SUMMARIZER_MAX_EMAILS_PER_SUMMARY
   );
@@ -298,8 +323,11 @@ function buildSummaryPrompt_(emailContents, knowledge, config, globalKnowledge) 
 /**
  * Send summary email to configured destination
  * Uses generic service layer for email delivery
+ * @param {string} summaryText - HTML summary content
+ * @param {Array} sourceEmails - Array of source email objects
+ * @param {string} labelName - Optional label name for custom summaries
  */
-function deliverSummaryEmail_(summaryText, sourceEmails) {
+function deliverSummaryEmail_(summaryText, sourceEmails, labelName) {
   try {
     const config = getSummarizerConfig_();
 
@@ -312,8 +340,10 @@ function deliverSummaryEmail_(summaryText, sourceEmails) {
 
     const dateResult = formatEmailDate_(new Date());
     const currentDate = dateResult && dateResult.success ? dateResult.date : new Date().toISOString().slice(0, 10);
-    // Fix emoji encoding issue by using plain text
-    const subject = `Email Summary - ${currentDate}`;
+
+    // Build subject line with optional label name
+    const labelSuffix = labelName && labelName !== 'summarize' ? ` [${labelName}]` : '';
+    const subject = `Email Summary${labelSuffix} - ${currentDate}`;
 
     // Convert markdown to HTML using shared utility with email styling
     const conversionResult = convertMarkdownToHtml_(summaryText, 'email');
@@ -326,17 +356,18 @@ function deliverSummaryEmail_(summaryText, sourceEmails) {
     const htmlSummary = conversionResult.html;
 
     // Build HTML content with proper styling
+    const labelDescription = labelName && labelName !== 'summarize' ? `"${labelName}"` : '"summarize"';
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; margin-bottom: 1.5em;">
-          Email Summary - ${currentDate}
+          Email Summary${labelSuffix} - ${currentDate}
         </h2>
         <div style="line-height: 1.6; color: #444;">
           ${htmlSummary}
         </div>
         <p style="margin-top: 2em; font-size: 12px; color: #666;">
           This summary was generated automatically from ${sourceEmails.length} email(s)
-          with the "summarize" label from the past ${config.SUMMARIZER_MAX_AGE_DAYS} days.
+          with the ${labelDescription} label from the past ${config.SUMMARIZER_MAX_AGE_DAYS} days.
         </p>
       </div>
     `;
@@ -361,10 +392,13 @@ function deliverSummaryEmail_(summaryText, sourceEmails) {
 /**
  * Process emails after summarization (relabel and archive)
  * Uses generic service layer for label management
+ * @param {Array} emails - Array of email objects
+ * @param {string} labelName - Label name being processed (optional, defaults to 'summarize')
  */
-function processEmailsAfterSummary_(emails) {
+function processEmailsAfterSummary_(emails, labelName) {
   try {
     const config = getSummarizerConfig_();
+    const isCustomLabel = labelName && labelName !== 'summarize';
 
     if (!emails || emails.length === 0) {
       return { success: true, processed: 0 };
@@ -377,7 +411,8 @@ function processEmailsAfterSummary_(emails) {
     const emailIds = emails.map(email => email.id);
 
     if (config.SUMMARIZER_DRY_RUN) {
-      Logger.log(`AgentSummarizer: DRY RUN - Would process ${emailIds.length} emails (relabel and archive)`);
+      const action = isCustomLabel ? 'mark as read/archive (custom label)' : 'relabel and archive';
+      Logger.log(`AgentSummarizer: DRY RUN - Would process ${emailIds.length} emails (${action})`);
       return {
         success: true,
         processed: emailIds.length,
@@ -385,29 +420,66 @@ function processEmailsAfterSummary_(emails) {
       };
     }
 
+    // Handle label transitions based on label type
+    let labelsToRemove = [];
+    let labelsToAdd = ['summarized'];
+
+    if (isCustomLabel) {
+      // Custom labels: Keep original label, only add "summarized"
+      labelsToRemove = [];
+    } else {
+      // Default 'summarize' label: Remove it and add "summarized"
+      labelsToRemove = ['summarize'];
+    }
+
     // Use generic service function for label transition
     const labelResult = manageLabelTransition_(
       emailIds,
-      ['summarize'],      // Remove "summarize" label
-      ['summarized']      // Add "summarized" label
+      labelsToRemove,
+      labelsToAdd
     );
 
     if (!labelResult.success) {
       return labelResult;
     }
 
-    // Use generic service function for archiving
-    const archiveResult = archiveEmailsByIds_(emailIds);
+    // Mark as read for custom labels if configured
+    let readResult = { success: true, marked: 0 };
+    if (isCustomLabel && config.MARK_CUSTOM_LABELS_AS_READ) {
+      readResult = markEmailsAsRead_(emailIds);
+      if (!readResult.success) {
+        Logger.log(`AgentSummarizer: Warning - Failed to mark emails as read: ${readResult.error}`);
+      }
+    }
+
+    // Archive based on label type
+    let archiveResult = { success: true, archived: 0 };
+    const shouldArchive = isCustomLabel
+      ? config.CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL
+      : true; // Default 'summarize' label always archives
+
+    if (shouldArchive) {
+      archiveResult = archiveEmailsByIds_(emailIds);
+    }
 
     if (config.SUMMARIZER_DEBUG) {
-      Logger.log(`AgentSummarizer: Processed ${labelResult.processed} emails, archived ${archiveResult.archived} emails`);
+      const debugParts = [`Processed ${labelResult.processed} emails`];
+      if (readResult.marked > 0) {
+        debugParts.push(`marked ${readResult.marked} as read`);
+      }
+      if (shouldArchive) {
+        debugParts.push(`archived ${archiveResult.archived} emails`);
+      }
+      Logger.log(`AgentSummarizer: ${debugParts.join(', ')}`);
     }
 
     return {
       success: true,
       processed: labelResult.processed,
-      archived: archiveResult.archived,
-      message: `Processed ${labelResult.processed} emails and archived ${archiveResult.archived} threads`
+      archived: archiveResult.archived || 0,
+      markedRead: readResult.marked || 0,
+      message: `Processed ${labelResult.processed} emails` +
+               (shouldArchive ? ` and archived ${archiveResult.archived} threads` : '')
     };
 
   } catch (error) {
@@ -476,8 +548,71 @@ function summarizerAgentHandler(ctx) {
 // ============================================================================
 
 /**
+ * Process a single label for summarization
+ * Helper function to consolidate summary logic
+ * @param {string} labelName - Label to process
+ * @returns {Object} - Result object with success status and details
+ */
+function processSingleLabelSummary_(labelName) {
+  const config = getSummarizerConfig_();
+
+  console.log(`Email Summarizer: Processing label "${labelName}"`);
+
+  // Step 1: Find emails for this label
+  const emailResult = findEmailsForSummary_(labelName);
+  if (!emailResult.success) {
+    console.log(`Email Summarizer [${labelName}]: Error finding emails - ${emailResult.error}`);
+    return { success: false, error: emailResult.error, label: labelName };
+  }
+
+  if (emailResult.count === 0) {
+    console.log(`Email Summarizer [${labelName}]: No emails found`);
+    return { success: true, reason: 'no_emails', processed: 0, label: labelName };
+  }
+
+  console.log(`Email Summarizer [${labelName}]: Found ${emailResult.count} emails`);
+
+  // Step 2: Generate AI summary
+  const summaryResult = generateSummaryFromEmails_(emailResult.emails);
+  if (!summaryResult.success) {
+    console.log(`Email Summarizer [${labelName}]: Error generating summary - ${summaryResult.error}`);
+    return { success: false, error: summaryResult.error, label: labelName };
+  }
+
+  // Step 3: Deliver summary email (with label name for custom labels)
+  const deliveryResult = deliverSummaryEmail_(summaryResult.summary, emailResult.emails, labelName);
+  if (!deliveryResult.success) {
+    console.log(`Email Summarizer [${labelName}]: Error delivering summary - ${deliveryResult.error}`);
+    return { success: false, error: deliveryResult.error, label: labelName };
+  }
+
+  console.log(`Email Summarizer [${labelName}]: Summary email delivered successfully`);
+
+  // Step 4: Process emails (relabel, mark read, and/or archive based on label type)
+  const processResult = processEmailsAfterSummary_(emailResult.emails, labelName);
+  if (!processResult.success) {
+    console.log(`Email Summarizer [${labelName}]: Error processing emails - ${processResult.error}`);
+    return { success: false, error: processResult.error, label: labelName };
+  }
+
+  const message = `Processed ${emailResult.count} emails for "${labelName}" label`;
+  console.log(`Email Summarizer [${labelName}]: ${message}`);
+
+  return {
+    success: true,
+    label: labelName,
+    processed: emailResult.count,
+    delivered: true,
+    archived: processResult.archived || 0,
+    markedRead: processResult.markedRead || 0,
+    message: message
+  };
+}
+
+/**
  * Main scheduled summarization workflow
  * Runs independently of individual email processing
+ * Processes both default 'summarize' label and custom labels (Issue #46)
  */
 function runEmailSummarizer() {
   try {
@@ -490,51 +625,66 @@ function runEmailSummarizer() {
 
     console.log('Email Summarizer: Starting scheduled run');
 
-    // Step 1: Find emails for summarization
-    const emailResult = findEmailsForSummary_();
-    if (!emailResult.success) {
-      console.log('Email Summarizer: Error finding emails - ' + emailResult.error);
-      return { success: false, error: emailResult.error };
+    const results = [];
+    let totalProcessed = 0;
+    let totalDelivered = 0;
+    let totalArchived = 0;
+    let totalMarkedRead = 0;
+    const errors = [];
+
+    // Process default 'summarize' label first
+    const defaultResult = processSingleLabelSummary_('summarize');
+    results.push(defaultResult);
+
+    if (defaultResult.success) {
+      totalProcessed += defaultResult.processed || 0;
+      if (defaultResult.delivered) totalDelivered++;
+      totalArchived += defaultResult.archived || 0;
+    } else if (defaultResult.error) {
+      errors.push(`summarize: ${defaultResult.error}`);
     }
 
-    if (emailResult.count === 0) {
-      console.log('Email Summarizer: No emails found for summarization');
-      return { success: true, reason: 'no_emails', processed: 0 };
+    // Process custom labels (Issue #46)
+    const customLabels = parseCustomLabels_();
+    if (customLabels.length > 0) {
+      console.log(`Email Summarizer: Processing ${customLabels.length} custom labels: ${customLabels.join(', ')}`);
+
+      for (let i = 0; i < customLabels.length; i++) {
+        const labelName = customLabels[i];
+        const customResult = processSingleLabelSummary_(labelName);
+        results.push(customResult);
+
+        if (customResult.success) {
+          totalProcessed += customResult.processed || 0;
+          if (customResult.delivered) totalDelivered++;
+          totalArchived += customResult.archived || 0;
+          totalMarkedRead += customResult.markedRead || 0;
+        } else if (customResult.error) {
+          errors.push(`${labelName}: ${customResult.error}`);
+        }
+      }
     }
 
-    console.log(`Email Summarizer: Found ${emailResult.count} emails for summarization`);
+    // Build final summary message
+    const labelCount = 1 + customLabels.length; // 'summarize' + custom labels
+    const finalMessage = `Email Summarizer completed: processed ${totalProcessed} emails across ${labelCount} label(s), ` +
+                         `delivered ${totalDelivered} summary email(s) to ${config.SUMMARIZER_DESTINATION_EMAIL}`;
 
-    // Step 2: Generate AI summary
-    const summaryResult = generateSummaryFromEmails_(emailResult.emails);
-    if (!summaryResult.success) {
-      console.log('Email Summarizer: Error generating summary - ' + summaryResult.error);
-      return { success: false, error: summaryResult.error };
-    }
-
-    // Step 3: Deliver summary email
-    const deliveryResult = deliverSummaryEmail_(summaryResult.summary, emailResult.emails);
-    if (!deliveryResult.success) {
-      console.log('Email Summarizer: Error delivering summary - ' + deliveryResult.error);
-      return { success: false, error: deliveryResult.error };
-    }
-
-    console.log('Email Summarizer: Summary email delivered successfully');
-
-    // Step 4: Process emails (relabel and archive)
-    const processResult = processEmailsAfterSummary_(emailResult.emails);
-    if (!processResult.success) {
-      console.log('Email Summarizer: Error processing emails - ' + processResult.error);
-      return { success: false, error: processResult.error };
-    }
-
-    const finalMessage = `Email Summarizer completed: processed ${emailResult.count} emails, delivered summary to ${config.SUMMARIZER_DESTINATION_EMAIL}`;
     console.log(finalMessage);
 
+    if (errors.length > 0) {
+      console.log(`Email Summarizer: Errors encountered: ${errors.join('; ')}`);
+    }
+
     return {
-      success: true,
-      processed: emailResult.count,
-      delivered: true,
-      archived: processResult.archived || 0,
+      success: errors.length < results.length, // Success if at least one label processed successfully
+      processed: totalProcessed,
+      delivered: totalDelivered,
+      archived: totalArchived,
+      markedRead: totalMarkedRead,
+      labelsProcessed: labelCount,
+      results: results,
+      errors: errors.length > 0 ? errors : undefined,
       message: finalMessage
     };
 
