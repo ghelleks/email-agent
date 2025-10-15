@@ -414,6 +414,46 @@ The Email Summarizer creates and manages these labels:
 3. Receive batch summary
 4. Use summary to prioritize which emails to read in full
 
+### Preventing Summarization Loops
+
+The Email Summarizer generates summary emails with the subject line `Email Summary - <date>` and sends them to your inbox. Without proper configuration, the core email classification system may incorrectly label these summary emails as `summarize`, creating a **summarization loop** where summaries get re-summarized indefinitely.
+
+**Solution**: Use the [Knowledge System](../features/knowledge-system.md) to teach the AI to recognize and correctly label system-generated summary emails.
+
+#### Example: Email Labeling Knowledge Document
+
+Create a Google Doc with instructions for preventing the summarization loop and configure it via `LABEL_INSTRUCTIONS_DOC_URL` or include it in your `LABEL_KNOWLEDGE_FOLDER_URL`:
+
+```
+Email Classification Instructions
+
+review:
+- Any email with the subject "Email Summary - <date>" is likely an output of your summarizer agent.
+  Label this email with "review", not "summarize" so you don't get into a summarization loop.
+  These emails likely contain the line "This summary was generated automatically from…" so you can
+  double check applicability.
+
+summarize:
+- Do not label any email with the subject line "Email Summary - <date>" as "summarize" or you'll
+  get into a summarization loop. Label it as "review" instead.
+  These emails likely contain the line "This summary was generated automatically from…" so you can
+  double check applicability.
+```
+
+**Configuration Steps:**
+
+1. Create a Google Doc with the classification instructions above
+2. Share the document (at least Viewer access for your Google account)
+3. Copy the document URL or ID
+4. Add to Script Properties:
+   ```
+   LABEL_INSTRUCTIONS_DOC_URL = https://docs.google.com/document/d/YOUR_DOC_ID/edit
+   ```
+
+The knowledge will be automatically injected into the email classification prompt on the next hourly trigger run.
+
+For more details on the knowledge system, see the [Knowledge System documentation](../features/knowledge-system.md).
+
 ## Prompt Building (ADR-022)
 
 The Email Summarizer **owns its prompt building function** (`buildSummaryPrompt_()`) within `AgentSummarizer.gs`, ensuring complete self-containment and independent evolution.
