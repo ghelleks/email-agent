@@ -334,7 +334,10 @@ function formatTimestamp_(date, format) {
  * Generic trigger creation pattern
  *
  * @param {string} functionName - Name of function to trigger
- * @param {object} schedule - Schedule configuration: {type: 'hours'|'minutes', interval: number}
+ * @param {object} schedule - Schedule configuration:
+ *   - {type: 'hours', interval: number} for hourly (1-24)
+ *   - {type: 'minutes', interval: number} for minutes (1, 5, 10, 15, 30)
+ *   - {type: 'daily', hour: number} for daily at specific hour (0-23)
  * @returns {{success: boolean, trigger?: object, error?: string}} Trigger creation result
  */
 function createTimeTrigger_(functionName, schedule) {
@@ -343,8 +346,8 @@ function createTimeTrigger_(functionName, schedule) {
       return { success: false, error: 'Function name is required' };
     }
 
-    if (!schedule || !schedule.type || !schedule.interval) {
-      return { success: false, error: 'Schedule must specify type and interval' };
+    if (!schedule || !schedule.type) {
+      return { success: false, error: 'Schedule must specify type' };
     }
 
     // Delete existing triggers for this function first
@@ -357,16 +360,31 @@ function createTimeTrigger_(functionName, schedule) {
 
     switch (schedule.type) {
       case 'hours':
+        if (!schedule.interval) {
+          return { success: false, error: 'Hours schedule must specify interval' };
+        }
         if (schedule.interval < 1 || schedule.interval > 24) {
           return { success: false, error: 'Hour interval must be between 1 and 24' };
         }
         triggerBuilder = triggerBuilder.everyHours(schedule.interval);
         break;
       case 'minutes':
+        if (!schedule.interval) {
+          return { success: false, error: 'Minutes schedule must specify interval' };
+        }
         if (![1, 5, 10, 15, 30].includes(schedule.interval)) {
           return { success: false, error: 'Minute interval must be 1, 5, 10, 15, or 30' };
         }
         triggerBuilder = triggerBuilder.everyMinutes(schedule.interval);
+        break;
+      case 'daily':
+        if (schedule.hour === undefined || schedule.hour === null) {
+          return { success: false, error: 'Daily schedule must specify hour (0-23)' };
+        }
+        if (schedule.hour < 0 || schedule.hour > 23) {
+          return { success: false, error: 'Hour must be between 0 and 23' };
+        }
+        triggerBuilder = triggerBuilder.everyDays(1).atHour(schedule.hour);
         break;
       default:
         return { success: false, error: `Unknown schedule type: ${schedule.type}` };
