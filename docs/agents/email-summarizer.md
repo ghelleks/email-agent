@@ -12,8 +12,11 @@ The Email Summarizer agent:
 - **Delivers** formatted HTML summaries via email with hyperlinks and source references
 - **Relabels** processed emails as `summarized` and archives them (if not already archived)
 - **Runs** on configurable daily triggers (default: 5 AM)
+- **NEW**: Supports custom labels (Issue #46) - generate separate summaries for any labels you specify (e.g., "Project1", "Init2")
 
 This agent operates independently and requires no manual intervention once configured. By default, emails are archived immediately when you apply the `summarize` label, keeping your inbox clean while the scheduled summarization process finds them via the label.
+
+**Custom Labels**: You can configure the agent to process additional labels with different behavior - keep labels intact, mark as read, or control archiving behavior independently from the default `summarize` label.
 
 ## Perfect For
 
@@ -21,6 +24,8 @@ This agent operates independently and requires no manual intervention once confi
 - **Email threads**: Digest multi-message conversations
 - **Batch processing**: Summarize multiple related emails at once
 - **Daily digests**: Receive summaries on a schedule
+- **Project tracking** (NEW): Separate summaries for different projects/topics using custom labels
+- **Category summaries** (NEW): Track multiple ongoing initiatives with dedicated summary emails
 
 ## Quick Start
 
@@ -89,6 +94,34 @@ Add these properties to Script Properties in the Apps Script editor:
 | `SUMMARIZER_DEBUG` | `false` | Enable detailed logging for the agent |
 | `SUMMARIZER_DRY_RUN` | `false` | Test mode (generates summary but doesn't send email) |
 
+### Custom Label Summaries (Issue #46)
+
+**NEW**: Generate separate daily summaries for custom labels (e.g., "Project1", "Init2", "Foo")
+
+The Email Summarizer can now process arbitrary custom labels in addition to the default `summarize` label. Each custom label generates a separate summary email with its own distinct behavior.
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `SUMMARIZER_CUSTOM_LABELS` | *(empty)* | Comma-separated list of custom labels to summarize (e.g., "Project1,Init2,Foo") |
+| `MARK_CUSTOM_LABELS_AS_READ` | `false` | Mark custom label emails as read after summarization |
+| `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL` | `false` | Archive custom label emails immediately when label is applied |
+
+#### Behavior Differences: Default vs. Custom Labels
+
+| Behavior | Default `summarize` Label | Custom Labels (e.g., "Project1") |
+|----------|---------------------------|----------------------------------|
+| **Label removal** | Removes `summarize` label after processing | Keeps original custom label |
+| **Label addition** | Adds `summarized` label | Adds `summarized` label |
+| **Mark as read** | No (leaves unread) | Configurable via `MARK_CUSTOM_LABELS_AS_READ` |
+| **Archive on label** | Archives immediately (default) | Configurable via `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL` |
+| **Archive after summary** | Archives if not already archived | Configurable via `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL` |
+| **Email subject** | "Email Summary - [date]" | "Email Summary [LabelName] - [date]" |
+
+#### Why Different Behavior?
+
+- **Default label** (`summarize`): Designed for "process and forget" workflow - emails are archived and removed from view after summarization
+- **Custom labels**: Designed for ongoing categorization - emails stay labeled and visible for project/topic tracking while still generating summaries
+
 ### Configuration Examples
 
 **Basic setup** (just receive summaries at different email):
@@ -106,6 +139,32 @@ SUMMARIZER_ARCHIVE_ON_LABEL = false
 SUMMARIZER_MAX_AGE_DAYS = 14
 SUMMARIZER_MAX_EMAILS_PER_SUMMARY = 100
 ```
+
+**Custom label summaries** (Issue #46):
+```
+SUMMARIZER_CUSTOM_LABELS = Project1,Init2,CustomerFeedback
+MARK_CUSTOM_LABELS_AS_READ = true
+CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL = false
+```
+
+This configuration:
+- Generates 4 separate daily summaries: default `summarize` + `Project1` + `Init2` + `CustomerFeedback`
+- Marks custom label emails as read after summarization
+- Keeps custom label emails in inbox (not archived) for ongoing visibility
+- Custom label emails retain their original label (e.g., "Project1" stays labeled)
+
+**Project tracking workflow example**:
+```
+SUMMARIZER_CUSTOM_LABELS = ProjectAlpha,ProjectBeta
+MARK_CUSTOM_LABELS_AS_READ = true
+CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL = false
+```
+
+Workflow:
+1. Label incoming project emails with `ProjectAlpha` or `ProjectBeta` labels
+2. Receive separate daily summaries for each project
+3. Emails stay in inbox with their project labels (for easy filtering/searching)
+4. Emails marked as read after summarization (reduce visual clutter)
 
 **Debug mode for troubleshooting**:
 ```
@@ -339,6 +398,10 @@ The Email Summarizer creates and manages these labels:
 
 - **`summarize`**: Apply this label to emails you want summarized (this is also used by core email labeling)
 - **`summarized`**: Automatically applied to processed emails (created by the agent)
+- **Custom labels** (Issue #46): Any labels you configure in `SUMMARIZER_CUSTOM_LABELS` will be processed independently
+  - Custom labels must already exist in Gmail (create them manually)
+  - Custom labels are preserved after summarization (not removed like `summarize`)
+  - Each custom label generates a separate summary email
 
 ## Troubleshooting
 
@@ -384,6 +447,34 @@ The Email Summarizer creates and manages these labels:
 
 **Solution**: Use dry run mode (`SUMMARIZER_DRY_RUN=true`) to test without sending emails
 
+### Custom label emails not being marked as read or archived (Issue #46)
+
+**Solution**: Verify `MARK_CUSTOM_LABELS_AS_READ=true` if you want emails marked as read
+
+**Solution**: Verify `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL=true` if you want emails archived
+
+**Solution**: **IMPORTANT**: Check if `SUMMARIZER_DRY_RUN=true` - dry run mode simulates actions without executing them
+
+**Solution**: Disable dry run mode (`SUMMARIZER_DRY_RUN=false`) to actually mark emails as read/archive them
+
+**Solution**: Note that default 'summarize' label behavior is different from custom labels (see behavior comparison table above)
+
+**Solution**: Check execution logs for "markedRead" and "archived" counts in results
+
+**Solution**: With `SUMMARIZER_DEBUG=true`, look for messages like "marked X as read" or warnings about failures
+
+### Custom label summaries not being generated
+
+**Solution**: Verify `SUMMARIZER_CUSTOM_LABELS` contains your label names (comma-separated, no spaces around commas)
+
+**Solution**: Check that emails exist with the custom labels in the past 7 days (or configured `SUMMARIZER_MAX_AGE_DAYS`)
+
+**Solution**: Run `runEmailSummarizer` manually in Apps Script editor and check execution logs
+
+**Solution**: Enable `SUMMARIZER_DEBUG=true` to see processing details for each label
+
+**Solution**: Verify custom labels exist in Gmail (create them manually if needed)
+
 ## Best Practices
 
 ### When to Use the Email Summarizer
@@ -413,6 +504,24 @@ The Email Summarizer creates and manages these labels:
 2. Apply `summarize` to those needing deeper review
 3. Receive batch summary
 4. Use summary to prioritize which emails to read in full
+
+**Project tracking workflow** (Issue #46):
+1. Configure custom labels: `SUMMARIZER_CUSTOM_LABELS = ProjectAlpha,ProjectBeta`
+2. Set behavior: `MARK_CUSTOM_LABELS_AS_READ = true`, `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL = false`
+3. Apply project labels to relevant emails as they arrive
+4. Receive separate daily summaries for each project at 5 AM
+5. Emails stay in inbox with project labels for ongoing visibility
+6. Use Gmail filters to view all emails for a specific project
+7. Archive manually when project phase completes
+
+**Multi-category workflow** (Issue #46):
+1. Configure categories: `SUMMARIZER_CUSTOM_LABELS = Customers,Partners,Press`
+2. Keep emails unread: `MARK_CUSTOM_LABELS_AS_READ = false`
+3. Keep in inbox: `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL = false`
+4. Apply category labels throughout the day
+5. Receive 4 separate summaries next morning: default + 3 categories
+6. Review each category summary independently
+7. Read full emails that need attention (still unread for visibility)
 
 ### Preventing Summarization Loops
 

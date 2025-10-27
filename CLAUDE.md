@@ -168,6 +168,8 @@ This dual-hook architecture ensures drafts are created for both newly-classified
 - `REPLY_DRAFTER_DRY_RUN`: Test mode for the agent (default: false)
 
 #### Email Summarizer Agent Configuration
+
+**Core Configuration:**
 - `SUMMARIZER_ENABLED`: Enable/disable Email Summarizer agent (default: true)
 - `SUMMARIZER_MAX_AGE_DAYS`: Maximum age of emails to include in summaries (default: 7)
 - `SUMMARIZER_MAX_EMAILS_PER_SUMMARY`: Maximum emails to process per summary (default: 50)
@@ -175,6 +177,30 @@ This dual-hook architecture ensures drafts are created for both newly-classified
 - `SUMMARIZER_ARCHIVE_ON_LABEL`: Enable/disable immediate archiving when 'summarize' label is applied (default: true)
 - `SUMMARIZER_DEBUG`: Enable detailed logging for the agent (default: false)
 - `SUMMARIZER_DRY_RUN`: Test mode for the agent (default: false)
+
+**Custom Label Support (Issue #46):**
+- `SUMMARIZER_CUSTOM_LABELS`: Comma-separated list of additional labels to summarize (e.g., "Project1,Init2,Foo")
+- `MARK_CUSTOM_LABELS_AS_READ`: Mark custom label emails as read after summarization (default: false)
+- `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL`: Archive custom label emails after summarization (default: false)
+
+**Behavior Differences:**
+- **Default 'summarize' label**: Removes label after processing, always archives, uses `SUMMARIZER_ARCHIVE_ON_LABEL`
+- **Custom labels**: Preserves original label, adds 'summarized' label, respects `MARK_CUSTOM_LABELS_AS_READ` and `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL`
+- **Separate summaries**: Each custom label generates its own daily summary email with subject like "Email Summary [Project1] - YYYY-MM-DD"
+
+**Example Configuration:**
+```javascript
+// In Apps Script Properties:
+SUMMARIZER_CUSTOM_LABELS=Project1,Init2,Foo
+MARK_CUSTOM_LABELS_AS_READ=true
+CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL=false
+
+// This generates 4 separate daily summary emails:
+// 1. "Email Summary - YYYY-MM-DD" (default 'summarize' label)
+// 2. "Email Summary [Project1] - YYYY-MM-DD"
+// 3. "Email Summary [Init2] - YYYY-MM-DD"
+// 4. "Email Summary [Foo] - YYYY-MM-DD"
+```
 
 #### Todo Forwarder Agent Configuration
 **Note**: Todo Forwarder configuration is managed in `AgentTodoForwarder.gs` via `getTodoForwarderConfig_()` function, following the self-contained architecture pattern.
@@ -670,6 +696,23 @@ Refer to `docs/adr/` for complete context:
 3. Review execution logs for detailed error messages
 4. Test with small `MAX_EMAILS_PER_RUN` values during development
 
+### Running Functions Manually in Apps Script Editor
+
+**IMPORTANT**: To run any function manually in the Apps Script editor, you must first **select the file containing that function** in the left sidebar. The function dropdown at the top only shows functions from the currently open file.
+
+**Common Functions and Their Files:**
+- `runEmailSummarizer` → Open **`AgentSummarizer.gs`**
+- `installTrigger` → Open **`Main.gs`**
+- `installSummarizerTrigger` → Open **`AgentSummarizer.gs`**
+- `processEmail` → Open **`Main.gs`**
+- `doGet` / `doPost` → Open **`WebAppController.gs`**
+
+**Steps to Run a Function:**
+1. Click on the appropriate `.gs` file in the left sidebar (Files section)
+2. Select the function from the dropdown at the top of the editor
+3. Click the Run button (▶️) to execute
+4. View logs in the Execution log panel (bottom) or Executions view (clock icon in sidebar)
+
 ### Multi-Account Troubleshooting
 
 **🔍 Problem**: `accounts.json not found` error
@@ -709,6 +752,23 @@ Refer to `docs/adr/` for complete context:
 - **Solution**: Install summarizer trigger with `installSummarizerTrigger` function
 - **Solution**: Check that emails with `summarize` label exist from past 7 days
 - **Solution**: Enable `SUMMARIZER_DEBUG=true` for detailed logging
+
+**🔍 Problem**: Custom label summaries not being generated (Issue #46)
+- **Solution**: Verify `SUMMARIZER_CUSTOM_LABELS` is configured with comma-separated label names
+- **Solution**: Check that custom labels exist in Gmail and are properly spelled in configuration
+- **Solution**: Verify emails with custom labels exist and are within `SUMMARIZER_MAX_AGE_DAYS` (default: 7 days)
+- **Solution**: Check execution logs for label-specific processing messages
+- **Solution**: Enable `SUMMARIZER_DEBUG=true` to see which labels are being processed
+- **Solution**: Custom labels preserve the original label - check if 'summarized' label was added
+
+**🔍 Problem**: Custom label emails not being marked as read or archived
+- **Solution**: Verify `MARK_CUSTOM_LABELS_AS_READ=true` if you want emails marked as read
+- **Solution**: Verify `CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL=true` if you want emails archived
+- **Solution**: **IMPORTANT**: Check if `SUMMARIZER_DRY_RUN=true` - dry run mode simulates actions without executing them
+- **Solution**: Disable dry run mode (`SUMMARIZER_DRY_RUN=false`) to actually mark emails as read/archive them
+- **Solution**: Note that default 'summarize' label behavior is different from custom labels
+- **Solution**: Check execution logs for "markedRead" and "archived" counts in results
+- **Solution**: With `SUMMARIZER_DEBUG=true`, look for messages like "marked X as read" or warnings about failures
 
 **🔍 Problem**: Multi-account commands not working
 - **Solution**: Ensure you have the latest `package.json` with multi-account scripts
