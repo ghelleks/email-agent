@@ -212,6 +212,38 @@ function sanitizeHtmlInput_(text) {
   }
 }
 
+/**
+ * Escape square brackets in text for use in markdown link titles
+ * Prevents markdown parsing errors when subjects contain [brackets]
+ * Addresses Issue #48: Malformed Markdown in Email Summaries
+ *
+ * Example: "[BCNAForum] Topic" → "\[BCNAForum\] Topic"
+ *
+ * @param {string} text - Text to escape
+ * @returns {{success: boolean, text?: string, error?: string}} Escaped text result
+ */
+function escapeMarkdownLinkText_(text) {
+  try {
+    if (!text) {
+      return { success: true, text: '' };
+    }
+
+    if (typeof text !== 'string') {
+      return { success: false, error: 'Input must be a string' };
+    }
+
+    // Escape square brackets for markdown link text
+    const escaped = text
+      .replace(/\[/g, '\\[')
+      .replace(/\]/g, '\\]');
+
+    return { success: true, text: escaped };
+
+  } catch (error) {
+    return standardErrorHandler_(error, 'escapeMarkdownLinkText_');
+  }
+}
+
 // ============================================================================
 // Section 2: Date/Time Utilities
 // ============================================================================

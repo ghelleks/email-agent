@@ -138,12 +138,17 @@ function bulkArchiveEmails_(emailIds) {
 
 /**
  * Generate Gmail permalinks for email references
+ * Escapes square brackets in subjects for markdown compatibility (Issue #48)
  * Returns: array of { subject: string, url: string }
  */
 function generateEmailPermalinks_(emails) {
   return emails.map(function(email) {
+    // Escape square brackets in subjects for markdown link text (Issue #48)
+    const escapeResult = escapeMarkdownLinkText_(email.subject);
+    const escapedSubject = escapeResult.success ? escapeResult.text : email.subject;
+
     return {
-      subject: email.subject,
+      subject: escapedSubject,
       url: 'https://mail.google.com/mail/u/0/#inbox/' + email.threadId
     };
   });
