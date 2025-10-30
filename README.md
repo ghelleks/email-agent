@@ -170,6 +170,27 @@ Successfully forwarded emails are automatically archived (with `todo` label pres
 
 [Todo Forwarder Documentation →](docs/agents/todo-forwarder.md)
 
+### Slack Notifier Agent
+
+**What it adds**: Real-time Slack notifications when labels are applied to emails
+
+Perfect for keeping teams informed about email classifications, monitoring urgent emails, or integrating Gmail labeling with Slack workflows. Configurable label filtering lets you notify only for important labels.
+
+**How it works**:
+- Immediate notifications via Slack webhook when labels are applied (onLabel hook)
+- Rich message formatting with email details, subject, sender, and Gmail link
+- Color-coded by label type for easy visual distinction
+- Runs automatically during email classification (no separate trigger needed)
+
+**Quick configuration example**:
+```
+SLACK_WEBHOOK_URL = https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+SLACK_ENABLED = true
+SLACK_LABELS = ["reply_needed","todo"]
+```
+
+[Slack Notifier Documentation →](docs/agents/slack-notifier.md)
+
 ### Interactive Web App Dashboard
 
 **What it adds**: Mobile-optimized web interface for on-demand email summarization
@@ -211,6 +232,7 @@ Teach the AI about your specific email patterns, priorities, and preferences usi
 - [Reply Drafter Agent](docs/agents/reply-drafter.md) — Automatic draft replies with AI
 - [Email Summarizer Agent](docs/agents/email-summarizer.md) — Daily email summaries
 - [Todo Forwarder Agent](docs/agents/todo-forwarder.md) — Automatic todo email forwarding
+- [Slack Notifier Agent](docs/agents/slack-notifier.md) — Real-time Slack notifications for labeling decisions
 - [Web App Dashboard](docs/features/web-app.md) — On-demand summarization interface
 - [Multi-Account Deployment](docs/features/multi-account.md) — Manage multiple accounts
 - [Knowledge System](docs/features/knowledge-system.md) — Customize AI classification
