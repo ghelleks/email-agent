@@ -493,7 +493,7 @@ function processEmailsAfterSummary_(emails, labelName) {
     let archiveResult = { success: true, archived: 0 };
     const shouldArchive = isCustomLabel
       ? config.CUSTOM_SUMMARIZER_ARCHIVE_ON_LABEL
-      : true; // Default 'summarize' label always archives
+      : config.SUMMARIZER_ARCHIVE_ON_LABEL; // Respect configuration (Issue #54)
 
     if (shouldArchive) {
       archiveResult = archiveEmailsByIds_(emailIds);

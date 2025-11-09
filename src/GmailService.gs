@@ -1,5 +1,5 @@
 function findUnprocessed_(max) {
-  const q = 'in:inbox -label:reply_needed -label:review -label:todo -label:summarize';
+  const q = 'in:inbox -label:reply_needed -label:review -label:todo -label:summarize -label:summarized';
   return GmailApp.search(q, 0, max);
 }
 
