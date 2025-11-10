@@ -2,7 +2,8 @@
  * Todo Forwarder Agent - Self-Contained Implementation
  *
  * This agent implements automated forwarding for emails labeled "todo":
- * - Forwards todo emails to a configured email address
+ * - Forwards todo emails to a configured email address using native Gmail forwarding
+ * - Preserves original email formatting, attachments, and thread structure
  * - Archives successfully forwarded emails (keeps todo label)
  * - Leaves failed forwards in inbox for retry
  * - Supports both immediate forwarding (onLabel) and inbox scanning (postLabel)
@@ -20,7 +21,7 @@
  * Features:
  * - Self-contained: manages own config without core Config.gs changes
  * - Idempotent: archive-based tracking prevents duplicates
- * - Thread-aware: forwards complete email threads with context
+ * - Native forwarding: uses Gmail's built-in forward() method to preserve email structure
  * - Dual-mode: immediate + inbox scanning without separate trigger
  * - Full error handling and dry-run support
  * - Automatic retry for failed forwards
@@ -76,115 +77,8 @@ function isEmailForwarded_(thread) {
 }
 
 /**
- * Get email thread data for forwarding
- * Returns formatted email content with full thread context
- *
- * @param {string} threadId - Gmail thread ID
- * @return {Object} Thread data object
- */
-function getEmailThreadForForwarding_(threadId) {
-  try {
-    const thread = GmailApp.getThreadById(threadId);
-
-    if (!thread) {
-      throw new Error('Thread not found: ' + threadId);
-    }
-
-    const messages = thread.getMessages();
-    const threadData = {
-      id: threadId,
-      subject: thread.getFirstMessageSubject() || '(No Subject)',
-      messageCount: messages.length,
-      messages: []
-    };
-
-    // Extract all messages in the thread
-    for (let i = 0; i < messages.length; i++) {
-      const msg = messages[i];
-      threadData.messages.push({
-        from: msg.getFrom(),
-        to: msg.getTo(),
-        subject: msg.getSubject(),
-        date: msg.getDate().toISOString(),
-        body: msg.getPlainBody() || msg.getBody() || ''
-      });
-    }
-
-    return threadData;
-
-  } catch (error) {
-    throw new Error('Failed to retrieve email thread: ' + error.toString());
-  }
-}
-
-/**
- * Format email thread as HTML for forwarding
- * Creates readable HTML representation of the entire thread
- *
- * @param {Object} threadData - Thread data from getEmailThreadForForwarding_
- * @return {string} HTML formatted email content
- */
-function formatEmailThreadAsHtml_(threadData) {
-  const parts = [];
-
-  parts.push('<html><body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">');
-  parts.push('<h2 style="color: #333; border-bottom: 2px solid #4285f4; padding-bottom: 10px;">');
-  parts.push('Todo: ' + threadData.subject);
-  parts.push('</h2>');
-
-  parts.push('<p style="color: #666; font-size: 14px; margin-bottom: 20px;">');
-  parts.push('This email thread contains ' + threadData.messageCount + ' message(s).');
-  parts.push('</p>');
-
-  // Add Gmail link
-  const gmailUrl = 'https://mail.google.com/mail/u/0/#inbox/' + threadData.id;
-  parts.push('<p style="margin-bottom: 20px;">');
-  parts.push('<a href="' + gmailUrl + '" style="color: #4285f4; text-decoration: none; font-weight: bold;">');
-  parts.push('→ View in Gmail');
-  parts.push('</a>');
-  parts.push('</p>');
-
-  // Add each message in the thread
-  for (let i = 0; i < threadData.messages.length; i++) {
-    const msg = threadData.messages[i];
-
-    parts.push('<div style="background: #f5f5f5; padding: 15px; margin-bottom: 15px; border-radius: 5px;">');
-    parts.push('<div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">');
-    parts.push('<strong>From:</strong> ' + msg.from + '<br>');
-    parts.push('<strong>To:</strong> ' + msg.to + '<br>');
-    parts.push('<strong>Date:</strong> ' + new Date(msg.date).toLocaleString() + '<br>');
-    if (msg.subject) {
-      parts.push('<strong>Subject:</strong> ' + msg.subject);
-    }
-    parts.push('</div>');
-
-    // Clean and format body
-    const body = msg.body
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\n/g, '<br>');
-
-    parts.push('<div style="white-space: pre-wrap; word-wrap: break-word;">');
-    parts.push(body);
-    parts.push('</div>');
-    parts.push('</div>');
-  }
-
-  // Add footer
-  parts.push('<hr style="margin-top: 30px; border: none; border-top: 1px solid #ccc;">');
-  parts.push('<p style="color: #999; font-size: 12px; margin-top: 15px;">');
-  parts.push('Forwarded by Todo Forwarder Agent | <a href="' + gmailUrl + '">View Original</a>');
-  parts.push('</p>');
-
-  parts.push('</body></html>');
-
-  return parts.join('\n');
-}
-
-/**
- * Forward email thread to configured address
- * Uses GmailApp to send formatted email
+ * Forward email thread to configured address using native Gmail forwarding
+ * Forwards the email as-is, preserving original formatting and attachments
  *
  * @param {string} threadId - Gmail thread ID
  * @param {string} toEmail - Destination email address
@@ -199,22 +93,28 @@ function forwardEmailThread_(threadId, toEmail) {
       };
     }
 
-    // Get thread data
-    const threadData = getEmailThreadForForwarding_(threadId);
+    // Get thread
+    const thread = GmailApp.getThreadById(threadId);
+    if (!thread) {
+      return {
+        success: false,
+        error: 'Thread not found: ' + threadId
+      };
+    }
 
-    // Format as HTML
-    const htmlContent = formatEmailThreadAsHtml_(threadData);
+    // Get all messages in the thread
+    const messages = thread.getMessages();
+    if (messages.length === 0) {
+      return {
+        success: false,
+        error: 'Thread has no messages: ' + threadId
+      };
+    }
 
-    // Forward email
-    const subject = '[Todo] ' + threadData.subject;
-    GmailApp.sendEmail(
-      toEmail,
-      subject,
-      'This email requires HTML support to display properly.',
-      {
-        htmlBody: htmlContent
-      }
-    );
+    // Forward the latest message in the thread (contains full thread context)
+    // Gmail's native forward preserves the original email structure, attachments, and formatting
+    const latestMessage = messages[messages.length - 1];
+    latestMessage.forward(toEmail);
 
     return {
       success: true,
