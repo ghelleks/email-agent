@@ -1,4 +1,4 @@
-# Gmail Labeler — AI-Powered Email Organization
+# Email Agent — AI-Powered Email Organization
 
 Automatically organize your Gmail inbox with AI-powered email labeling. Your emails are categorized into actionable labels like `reply_needed`, `review`, `todo`, and `summarize` — all running in Google's cloud with no servers to manage.
 
