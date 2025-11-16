@@ -41,7 +41,7 @@ This connects the command-line tool to your Google account.
 ### Step 2: Get a Gemini API Key
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (e.g., "Gmail Labeler")
+2. Create a new project (e.g., "Email Agent")
 3. Enable "Generative Language API" (search for it)
 4. Go to "APIs & Services" → "Credentials"
 5. Click "Create credentials" → "API key"
@@ -55,7 +55,7 @@ git clone https://github.com/yourusername/email-agent.git
 cd email-agent
 
 # Create the Apps Script project (with source files in src/ directory)
-clasp create --title "Gmail Labeler" --type standalone --rootDir ./src
+clasp create --title "Email Agent" --type standalone --rootDir ./src
 
 # Upload code to Google's cloud
 clasp push
@@ -86,7 +86,7 @@ In the Apps Script editor that just opened:
 4. **Authorize the script** when prompted:
    - Click "Review permissions"
    - Choose your Google account
-   - Click "Advanced" → "Go to Gmail Labeler (unsafe)"
+   - Click "Advanced" → "Go to Email Agent (unsafe)"
    - Click "Allow"
 5. Check the **"Execution log"** at the bottom for results
 6. Check your **Gmail** — you should see new labels applied to emails
