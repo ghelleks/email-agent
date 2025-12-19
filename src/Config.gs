@@ -38,7 +38,9 @@ function getConfig_() {
     KNOWLEDGE_LOG_SIZE_WARNINGS: (p.getProperty('KNOWLEDGE_LOG_SIZE_WARNINGS') || 'true').toLowerCase() === 'true',
     // KnowledgeService Test Configuration
     TEST_DOC_URL: p.getProperty('TEST_DOC_URL'),
-    TEST_FOLDER_URL: p.getProperty('TEST_FOLDER_URL')
+    TEST_FOLDER_URL: p.getProperty('TEST_FOLDER_URL'),
+    // API Retry Configuration
+    API_MAX_RETRIES: parseInt(p.getProperty('API_MAX_RETRIES') || '3', 10)
   };
 }
 
