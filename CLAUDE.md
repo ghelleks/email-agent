@@ -144,7 +144,7 @@ Configuration uses Apps Script Script Properties accessible via the Apps Script 
 - `PROJECT_ID`: Google Cloud project for Vertex AI (Vertex mode)
 - `DRY_RUN`: Test mode that analyzes without applying labels
 - `DEBUG`: Enables verbose logging
-- `MAX_EMAILS_PER_RUN`: Limits emails processed per execution (default: 20)
+- `MAX_EMAILS_PER_RUN`: Limits emails processed per execution (default: 10)
 - `BATCH_SIZE`: Number of emails sent to AI in one request (default: 10)
 
 #### API Retry and Throttling Configuration
@@ -164,8 +164,8 @@ The system automatically handles Gemini API quota and rate limit errors with exp
 - **Logs show**: `"Quota exceeded. Retry 1/3 after 11.06s"` during retry attempts
 
 **Configuration Strategy:**
-- **Low volume**: Default `API_MAX_RETRIES=3` handles occasional bursts
-- **High volume**: Reduce `MAX_EMAILS_PER_RUN` or increase trigger interval (hourly → 2-4 hours)
+- **Low volume**: Default `MAX_EMAILS_PER_RUN=10` with `API_MAX_RETRIES=3` handles free tier (20 RPM)
+- **High volume**: Reduce `MAX_EMAILS_PER_RUN` to 5 or increase trigger interval (hourly → 2-4 hours)
 - **Production**: Upgrade to paid tier for higher quotas (monitor at [Google Cloud Console](https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas))
 
 #### Web App Configuration
