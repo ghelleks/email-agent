@@ -144,8 +144,29 @@ Configuration uses Apps Script Script Properties accessible via the Apps Script 
 - `PROJECT_ID`: Google Cloud project for Vertex AI (Vertex mode)
 - `DRY_RUN`: Test mode that analyzes without applying labels
 - `DEBUG`: Enables verbose logging
-- `MAX_EMAILS_PER_RUN`: Limits emails processed per execution (default: 20)
+- `MAX_EMAILS_PER_RUN`: Limits emails processed per execution (default: 10)
 - `BATCH_SIZE`: Number of emails sent to AI in one request (default: 10)
+
+#### API Retry and Throttling Configuration
+- `API_MAX_RETRIES`: Maximum retry attempts for quota/rate limit errors (default: 3)
+
+**Retry Behavior:**
+The system automatically handles Gemini API quota and rate limit errors with exponential backoff:
+1. **Parse Google's retry delay**: Extracts "retry in X seconds" from error messages
+2. **Smart waiting**: Respects Google's exact timing + 10% buffer
+3. **Exponential backoff**: Uses 2^attempt seconds if no delay specified
+4. **Quota-only retries**: Only retries quota/rate limit errors (429, RESOURCE_EXHAUSTED)
+5. **Non-retryable errors**: Token limit errors fail immediately (no retry)
+
+**Free Tier Limits:**
+- **gemini-2.5-flash**: 20 requests/minute (free tier)
+- **Impact**: With agents (Reply Drafter, Summarizer, Todo Forwarder), API calls multiply quickly
+- **Logs show**: `"Quota exceeded. Retry 1/3 after 11.06s"` during retry attempts
+
+**Configuration Strategy:**
+- **Low volume**: Default `MAX_EMAILS_PER_RUN=10` with `API_MAX_RETRIES=3` handles free tier (20 RPM)
+- **High volume**: Reduce `MAX_EMAILS_PER_RUN` to 5 or increase trigger interval (hourly → 2-4 hours)
+- **Production**: Upgrade to paid tier for higher quotas (monitor at [Google Cloud Console](https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas))
 
 #### Web App Configuration
 - `WEBAPP_ENABLED`: Enable/disable web app functionality (default: true)

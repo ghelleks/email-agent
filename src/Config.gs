@@ -7,7 +7,7 @@ function getConfig_() {
     RULE_DOC_ID: p.getProperty('RULE_DOC_ID'),
     RULE_DOC_URL: p.getProperty('RULE_DOC_URL'),
     DEFAULT_FALLBACK_LABEL: p.getProperty('DEFAULT_FALLBACK_LABEL') || 'review',
-    MAX_EMAILS_PER_RUN: parseInt(p.getProperty('MAX_EMAILS_PER_RUN') || '20', 10),
+    MAX_EMAILS_PER_RUN: parseInt(p.getProperty('MAX_EMAILS_PER_RUN') || '10', 10),
     BATCH_SIZE: parseInt(p.getProperty('BATCH_SIZE') || '10', 10),
     BODY_CHARS: parseInt(p.getProperty('BODY_CHARS') || '1200', 10),
     DRY_RUN: (p.getProperty('DRY_RUN') || 'false').toLowerCase() === 'true',
@@ -38,7 +38,9 @@ function getConfig_() {
     KNOWLEDGE_LOG_SIZE_WARNINGS: (p.getProperty('KNOWLEDGE_LOG_SIZE_WARNINGS') || 'true').toLowerCase() === 'true',
     // KnowledgeService Test Configuration
     TEST_DOC_URL: p.getProperty('TEST_DOC_URL'),
-    TEST_FOLDER_URL: p.getProperty('TEST_FOLDER_URL')
+    TEST_FOLDER_URL: p.getProperty('TEST_FOLDER_URL'),
+    // API Retry Configuration
+    API_MAX_RETRIES: parseInt(p.getProperty('API_MAX_RETRIES') || '3', 10)
   };
 }
 
