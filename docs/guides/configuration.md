@@ -301,6 +301,75 @@ TODO_FORWARDER_DEBUG = true
 TODO_FORWARDER_DRY_RUN = true
 ```
 
+## Slack Notifier Agent Configuration
+
+Settings for the [Slack Notifier Agent](../agents/slack-notifier.md).
+
+**Note**: Slack Notifier configuration is managed in `AgentSlackNotifier.gs` via `getSlackNotifierConfig_()` function, following the self-contained agent architecture pattern.
+
+**Execution Mode**: The Slack Notifier uses the **onLabel hook** to send immediate notifications when labels are applied during email classification.
+
+### Basic Configuration
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `SLACK_ENABLED` | `false` | Enable/disable the Slack Notifier agent |
+| `SLACK_WEBHOOK_URL` | None | Slack webhook URL (required - agent disabled if not set) |
+
+**Label Filtering**: Use `SLACK_LABELS` property to control which labels trigger notifications:
+- **Not set** (default): Notifies for all labels (`reply_needed`, `review`, `todo`, `summarize`)
+- **Empty array** `[]`: Disables notifications (even if `SLACK_ENABLED=true`)
+- **Specific labels** `["reply_needed","todo"]`: Only notifies for specified labels
+
+### Optional Configuration
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `SLACK_LABELS` | All labels | JSON array of labels to notify about (e.g., `["reply_needed","todo"]`) |
+| `SLACK_USERNAME` | `Email Agent` | Bot username for Slack messages |
+| `SLACK_CHANNEL` | Webhook default | Override channel (e.g., `#email-alerts`) |
+| `SLACK_ICON_EMOJI` | `:email:` | Emoji icon for bot messages |
+| `SLACK_DEBUG` | `false` | Enable detailed logging for the agent |
+
+**Configuration examples**:
+
+**Minimal setup** (notify for all labels):
+```
+SLACK_WEBHOOK_URL = https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+SLACK_ENABLED = true
+```
+
+**Selective notifications** (only urgent labels):
+```
+SLACK_WEBHOOK_URL = https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+SLACK_ENABLED = true
+SLACK_LABELS = ["reply_needed","todo"]
+```
+
+**Custom channel and username**:
+```
+SLACK_WEBHOOK_URL = https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+SLACK_ENABLED = true
+SLACK_LABELS = ["reply_needed"]
+SLACK_CHANNEL = #urgent-emails
+SLACK_USERNAME = Gmail Labeler
+```
+
+**Debug mode**:
+```
+SLACK_WEBHOOK_URL = https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+SLACK_ENABLED = true
+SLACK_DEBUG = true
+```
+
+**Setup Instructions**:
+1. Go to your Slack workspace settings
+2. Navigate to Apps → Incoming Webhooks
+3. Click "Add to Slack"
+4. Choose a channel for notifications
+5. Copy the webhook URL
+6. Add to Script Properties as `SLACK_WEBHOOK_URL`
+
 ## Knowledge System Configuration
 
 Settings for the [Knowledge System](../features/knowledge-system.md) (advanced).
