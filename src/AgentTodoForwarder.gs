@@ -59,8 +59,8 @@ function getTodoForwarderConfig_() {
  * Returns true if email is archived (indicating successful forward)
  *
  * Archive-based idempotency strategy:
- * - Successfully forwarded emails are archived with 'todo' label
- * - Only inbox emails with 'todo' label are processed
+ * - Successfully forwarded emails are archived with todo label
+ * - Only inbox emails with todo label are processed
  * - Simple, reliable, and requires no additional labels
  *
  * @param {GmailThread} thread - Gmail thread object
@@ -173,12 +173,12 @@ function processTodoForward_(ctx) {
     const forwardResult = forwardEmailThread_(ctx.threadId, config.TODO_FORWARDER_EMAIL);
 
     if (!forwardResult.success) {
-      // Leave in inbox with 'todo' label for retry on next run
+      // Leave in inbox with todo label for retry on next run
       ctx.log('Forward failed: ' + forwardResult.error + ' - email left in inbox for retry');
       return { status: 'error', info: forwardResult.error };
     }
 
-    // Archive on successful forward (keeps 'todo' label, marks as processed)
+    // Archive on successful forward (keeps todo label, marks as processed)
     ctx.thread.moveToArchive();
 
     if (config.TODO_FORWARDER_DEBUG) {
@@ -209,7 +209,7 @@ function processTodoForward_(ctx) {
  * - Failed forwards that need retry
  *
  * Archive-based idempotency:
- * - Only processes emails IN THE INBOX with 'todo' label
+ * - Only processes emails IN THE INBOX with todo label
  * - Successfully forwarded emails are archived (automatic deduplication)
  * - Failed forwards remain in inbox for automatic retry
  *
@@ -236,7 +236,8 @@ function todoForwarderPostLabelScan_() {
 
     // Find all emails with "todo" label that are IN THE INBOX (not archived)
     // Archive status indicates already forwarded - simple and reliable
-    const query = 'in:inbox label:todo';
+    const coreConfig = getConfig_();
+    const query = `in:inbox label:"${coreConfig.LABEL_TODO}"`;
     const threads = GmailApp.search(query);
 
     if (threads.length === 0) {
@@ -275,13 +276,13 @@ function todoForwarderPostLabelScan_() {
           const forwardResult = forwardEmailThread_(threadId, config.TODO_FORWARDER_EMAIL);
 
           if (!forwardResult.success) {
-            // Leave in inbox with 'todo' label for retry on next run
+            // Leave in inbox with todo label for retry on next run
             Logger.log(`Todo Forwarder postLabel: Failed to forward thread ${threadId} - ${forwardResult.error} - left in inbox for retry`);
             errors++;
             continue;
           }
 
-          // Archive on successful forward (keeps 'todo' label, marks as processed)
+          // Archive on successful forward (keeps todo label, marks as processed)
           thread.moveToArchive();
 
           Logger.log(`Todo Forwarder postLabel: Forwarded and archived thread ${threadId} to ${config.TODO_FORWARDER_EMAIL}`);
@@ -323,8 +324,9 @@ AGENT_MODULES.push(function(api) {
    * - onLabel: Immediate forwarding during classification
    * - postLabel: Inbox scan to catch manually-labeled emails
    */
+  const coreConfig = getConfig_();
   api.register(
-    'todo',                    // Label to trigger on
+    coreConfig.LABEL_TODO,     // Label to trigger on
     'TodoForwarder',           // Agent name
     {
       onLabel: processTodoForward_,           // Immediate per-email handler

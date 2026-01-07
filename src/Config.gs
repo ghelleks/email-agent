@@ -6,6 +6,11 @@ function getConfig_() {
     LOCATION: p.getProperty('GOOGLE_CLOUD_LOCATION') || 'us-central1',
     RULE_DOC_ID: p.getProperty('RULE_DOC_ID'),
     RULE_DOC_URL: p.getProperty('RULE_DOC_URL'),
+    // Label names (configurable)
+    LABEL_REPLY_NEEDED: p.getProperty('LABEL_REPLY_NEEDED') || 'reply_needed',
+    LABEL_REVIEW: p.getProperty('LABEL_REVIEW') || 'review',
+    LABEL_TODO: p.getProperty('LABEL_TODO') || 'todo',
+    LABEL_SUMMARIZE: p.getProperty('LABEL_SUMMARIZE') || 'summarize',
     DEFAULT_FALLBACK_LABEL: p.getProperty('DEFAULT_FALLBACK_LABEL') || 'review',
     MAX_EMAILS_PER_RUN: parseInt(p.getProperty('MAX_EMAILS_PER_RUN') || '10', 10),
     BATCH_SIZE: parseInt(p.getProperty('BATCH_SIZE') || '10', 10),
@@ -45,7 +50,8 @@ function getConfig_() {
 }
 
 function ensureLabels_() {
-  ['reply_needed','review','todo','summarize'].forEach(function(name) {
+  const cfg = getConfig_();
+  [cfg.LABEL_REPLY_NEEDED, cfg.LABEL_REVIEW, cfg.LABEL_TODO, cfg.LABEL_SUMMARIZE].forEach(function(name) {
     if (!GmailApp.getUserLabelByName(name)) GmailApp.createLabel(name);
   });
 }

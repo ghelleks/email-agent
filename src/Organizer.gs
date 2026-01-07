@@ -1,5 +1,6 @@
 function applyLabel_(thread, labelName, dryRun) {
-  const actionNames = ['reply_needed','review','todo','summarize'];
+  const cfg = getConfig_();
+  const actionNames = [cfg.LABEL_REPLY_NEEDED, cfg.LABEL_REVIEW, cfg.LABEL_TODO, cfg.LABEL_SUMMARIZE];
   const hasAny = thread.getLabels().some(function(l) { return actionNames.includes(l.getName()); });
   if (hasAny) return 'skipped';
   if (dryRun) return 'would-label:' + labelName;
