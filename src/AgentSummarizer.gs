@@ -2,7 +2,7 @@
  * Email Summarizer Agent - Self-Contained Implementation
  *
  * This agent implements the requirements from GitHub Issue #10:
- * - Retrieves all emails labeled "summarize"
+ * - Retrieves all emails labeled with the summarize label (configurable)
  * - Archives emails immediately when labeled (configurable)
  * - Generates summaries in "The Economist's World in Brief" style
  * - Delivers summaries via email with hyperlinks and source references
@@ -97,11 +97,12 @@ function parseCustomLabels_() {
 /**
  * Find emails for summarization using generic service layer
  * Returns structured email data compatible with existing AI services
- * @param {string} labelName - Label to search for (defaults to 'summarize')
+ * @param {string} labelName - Label to search for (defaults to configured summarize label)
  */
 function findEmailsForSummary_(labelName) {
   const config = getSummarizerConfig_();
-  const label = labelName || 'summarize';
+  const coreConfig = getConfig_();
+  const label = labelName || coreConfig.LABEL_SUMMARIZE;
 
   // Use generic service function for email finding
   return findEmailsByLabelWithAge_(
@@ -379,7 +380,8 @@ function deliverSummaryEmail_(summaryText, sourceEmails, labelName) {
     const currentDate = dateResult && dateResult.success ? dateResult.date : new Date().toISOString().slice(0, 10);
 
     // Build subject line with optional label name
-    const labelSuffix = labelName && labelName !== 'summarize' ? ` [${labelName}]` : '';
+    const coreConfig = getConfig_();
+    const labelSuffix = labelName && labelName !== coreConfig.LABEL_SUMMARIZE ? ` [${labelName}]` : '';
     const subject = `Email Summary${labelSuffix} - ${currentDate}`;
 
     // Convert markdown to HTML using shared utility with email styling
@@ -393,7 +395,7 @@ function deliverSummaryEmail_(summaryText, sourceEmails, labelName) {
     const htmlSummary = conversionResult.html;
 
     // Build HTML content with proper styling
-    const labelDescription = labelName && labelName !== 'summarize' ? `"${labelName}"` : '"summarize"';
+    const labelDescription = labelName && labelName !== coreConfig.LABEL_SUMMARIZE ? `"${labelName}"` : `"${coreConfig.LABEL_SUMMARIZE}"`;
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; margin-bottom: 1.5em;">
@@ -430,12 +432,13 @@ function deliverSummaryEmail_(summaryText, sourceEmails, labelName) {
  * Process emails after summarization (relabel and archive)
  * Uses generic service layer for label management
  * @param {Array} emails - Array of email objects
- * @param {string} labelName - Label name being processed (optional, defaults to 'summarize')
+ * @param {string} labelName - Label name being processed (optional, defaults to configured summarize label)
  */
 function processEmailsAfterSummary_(emails, labelName) {
   try {
     const config = getSummarizerConfig_();
-    const isCustomLabel = labelName && labelName !== 'summarize';
+    const coreConfig = getConfig_();
+    const isCustomLabel = labelName && labelName !== coreConfig.LABEL_SUMMARIZE;
 
     if (!emails || emails.length === 0) {
       return { success: true, processed: 0 };
@@ -465,8 +468,8 @@ function processEmailsAfterSummary_(emails, labelName) {
       // Custom labels: Keep original label, only add "summarized"
       labelsToRemove = [];
     } else {
-      // Default 'summarize' label: Remove it and add "summarized"
-      labelsToRemove = ['summarize'];
+      // Default summarize label: Remove it and add "summarized"
+      labelsToRemove = [coreConfig.LABEL_SUMMARIZE];
     }
 
     // Use generic service function for label transition
@@ -558,7 +561,8 @@ function summarizerAgentHandler(ctx) {
       // Archive the email thread immediately
       try {
         ctx.thread.moveToArchive();
-        ctx.log('Email archived immediately after "summarize" label applied');
+        const coreConfig = getConfig_();
+        ctx.log(`Email archived immediately after "${coreConfig.LABEL_SUMMARIZE}" label applied`);
         return { status: 'ok', info: 'email archived and queued for summarization' };
       } catch (archiveError) {
         ctx.log('Failed to archive email: ' + archiveError.toString());
@@ -649,7 +653,7 @@ function processSingleLabelSummary_(labelName) {
 /**
  * Main scheduled summarization workflow
  * Runs independently of individual email processing
- * Processes both default 'summarize' label and custom labels (Issue #46)
+ * Processes both default summarize label and custom labels (Issue #46)
  */
 function runEmailSummarizer() {
   try {
@@ -669,8 +673,9 @@ function runEmailSummarizer() {
     let totalMarkedRead = 0;
     const errors = [];
 
-    // Process default 'summarize' label first
-    const defaultResult = processSingleLabelSummary_('summarize');
+    // Process default summarize label first
+    const coreConfig = getConfig_();
+    const defaultResult = processSingleLabelSummary_(coreConfig.LABEL_SUMMARIZE);
     results.push(defaultResult);
 
     if (defaultResult.success) {
@@ -703,7 +708,7 @@ function runEmailSummarizer() {
     }
 
     // Build final summary message
-    const labelCount = 1 + customLabels.length; // 'summarize' + custom labels
+    const labelCount = 1 + customLabels.length; // default summarize label + custom labels
     const finalMessage = `Email Summarizer completed: processed ${totalProcessed} emails across ${labelCount} label(s), ` +
                          `delivered ${totalDelivered} summary email(s) to ${config.SUMMARIZER_DESTINATION_EMAIL}`;
 
@@ -775,7 +780,7 @@ if (typeof AGENT_MODULES === 'undefined') {
 
 AGENT_MODULES.push(function(api) {
   /**
-   * Register Email Summarizer agent for "summarize" label
+   * Register Email Summarizer agent for summarize label
    * Agent acknowledges emails via onLabel (immediate archive if enabled)
    * Separate daily trigger handles actual summarization (runEmailSummarizer)
    *
@@ -783,8 +788,9 @@ AGENT_MODULES.push(function(api) {
    * - onLabel: Immediate archive when label applied (if enabled)
    * - postLabel: null (uses separate daily trigger instead)
    */
+  const coreConfig = getConfig_();
   api.register(
-    'summarize',           // Label to trigger on
+    coreConfig.LABEL_SUMMARIZE,  // Label to trigger on
     'emailSummarizer',     // Agent name
     {
       onLabel: summarizerAgentHandler,  // Immediate archive behavior

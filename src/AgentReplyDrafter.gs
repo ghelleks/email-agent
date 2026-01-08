@@ -448,8 +448,9 @@ function replyDrafterPostLabelScan_() {
       Logger.log('Reply Drafter postLabel: Starting inbox scan');
     }
 
-    // Find all emails with "reply_needed" label in inbox
-    const query = 'in:inbox label:reply_needed';
+    // Find all emails with reply_needed label in inbox
+    const coreConfig = getConfig_();
+    const query = `in:inbox label:"${coreConfig.LABEL_REPLY_NEEDED}"`;
     const threads = GmailApp.search(query);
 
     if (threads.length === 0) {
@@ -589,8 +590,9 @@ AGENT_MODULES.push(function(api) {
    * - onLabel: Immediate draft creation during classification
    * - postLabel: Inbox scan to catch manually-labeled emails
    */
+  const coreConfig = getConfig_();
   api.register(
-    'reply_needed',           // Label to trigger on
+    coreConfig.LABEL_REPLY_NEEDED,  // Label to trigger on
     'ReplyDrafter',           // Agent name
     {
       onLabel: processReplyNeeded_,      // Immediate per-email handler
