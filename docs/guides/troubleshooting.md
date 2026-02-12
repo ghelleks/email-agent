@@ -291,6 +291,18 @@ SUMMARIZER_ARCHIVE_ON_LABEL = true
 
 **Solution**: Check execution logs for permission errors
 
+### Emoji or Unicode in subject lines display as replacement characters (Issue #68)
+
+**Symptoms**: Subject lines with emoji (e.g. 📜, 📧) or other Unicode (accented characters, CJK) appear as `` or garbled in summaries or downstream (e.g. daily briefing).
+
+**Causes**: Encoding mismatch when subject lines are serialized or rendered (e.g. UTF-8 interpreted as Latin-1).
+
+**Solutions**:
+
+**In this app**: Subject lines from Gmail are preserved as Unicode. Source-email subjects in summary emails are HTML-escaped for safe display while preserving Unicode. Link text in markdown→HTML conversion is also escaped. No regression for ASCII-only subjects.
+
+**If using email data in another system** (e.g. daily-briefing-assembler): Ensure the consumer reads/writes with UTF-8 (e.g. `Content-Type: application/json; charset=utf-8`, HTML `<meta charset="utf-8">`, or equivalent).
+
 ### Duplicate summaries or processing issues
 
 **Solution**: Check execution logs for errors during summarization
