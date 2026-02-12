@@ -52,6 +52,9 @@ function convertMarkdownToHtml_(markdownText, stylePreset) {
     const styles = styleConfig.styles;
     let html = sanitizeResult.text;
 
+    // Normalize markdown links so link text has escaped brackets (Issue #66)
+    html = normalizeMarkdownLinks_(html);
+
     // Convert headers (### Header -> <h3>Header</h3>)
     html = html.replace(/^### (.+)$/gm, `<h3 style="${styles.h3}">$1</h3>`);
     html = html.replace(/^## (.+)$/gm, `<h2 style="${styles.h2}">$1</h2>`);
@@ -68,15 +71,15 @@ function convertMarkdownToHtml_(markdownText, stylePreset) {
       html = html.replace(/\*\*Sources:\*\*\s*(.+)/g, function(match, sourcesList) {
         const sources = sourcesList.split(/,\s*(?=\[)/);
         const listItems = sources.map(source => {
-          const linkedSource = source.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" style="${styles.link}">$1</a>`);
-          return `<li style="${styles.listItem}">${linkedSource.trim()}</li>`;
+          const linkedSource = replaceMarkdownLinksToHtml_(source.trim(), styles.link, false);
+          return `<li style="${styles.listItem}">${linkedSource}</li>`;
         }).join('');
         return `<strong style="${styles.bold}">Sources:</strong><ul style="${styles.list}">${listItems}</ul>`;
       });
     }
 
-    // Convert remaining links ([text](url) -> <a href="url">text</a>)
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" style="${styles.link}" ${stylePreset === 'web' ? 'target="_blank"' : ''}>$1</a>`);
+    // Convert remaining links ([text](url) -> <a href="url">text</a>); supports escaped brackets in link text (Issue #66)
+    html = replaceMarkdownLinksToHtml_(html, styles.link, stylePreset === 'web');
 
     // Convert bullet lists (simple implementation)
     if (stylePreset === 'web') {
@@ -242,6 +245,99 @@ function escapeMarkdownLinkText_(text) {
   } catch (error) {
     return standardErrorHandler_(error, 'escapeMarkdownLinkText_');
   }
+}
+
+/**
+ * Normalize markdown so all [link text](url) have escaped brackets in link text.
+ * Finds each link by locating ]( and the matching [, then escapes any unescaped
+ * [ or ] in the link text. Ensures downstream conversion handles any AI output.
+ * Issue #66: comprehensive markdown link escaping.
+ *
+ * @param {string} markdown - Markdown content
+ * @returns {string} Markdown with link text normalized (brackets escaped)
+ */
+function normalizeMarkdownLinks_(markdown) {
+  if (!markdown || typeof markdown !== 'string') {
+    return markdown;
+  }
+
+  let result = markdown;
+  let searchStart = 0;
+  const len = result.length;
+
+  while (searchStart < len) {
+    const linkEnd = result.indexOf('](', searchStart);
+    if (linkEnd === -1) {
+      break;
+    }
+
+    const closeBracketPos = linkEnd;
+    let endOfLinkText = closeBracketPos;
+    while (endOfLinkText > 0 && result.charAt(endOfLinkText - 1) === '\\') {
+      endOfLinkText -= 2;
+    }
+    if (endOfLinkText <= 0) {
+      searchStart = linkEnd + 1;
+      continue;
+    }
+
+    let startOfLinkText = endOfLinkText - 1;
+    while (startOfLinkText >= 0) {
+      const c = result.charAt(startOfLinkText);
+      if (c === '[') {
+        const prev = startOfLinkText > 0 ? result.charAt(startOfLinkText - 1) : '';
+        if (prev !== '\\') {
+          break;
+        }
+        startOfLinkText -= 2;
+      } else {
+        startOfLinkText -= 1;
+      }
+    }
+
+    if (startOfLinkText < 0) {
+      searchStart = linkEnd + 1;
+      continue;
+    }
+
+    const urlStart = linkEnd + 2;
+    const urlEnd = result.indexOf(')', urlStart);
+    if (urlEnd === -1) {
+      searchStart = linkEnd + 1;
+      continue;
+    }
+
+    let linkText = result.substring(startOfLinkText + 1, endOfLinkText);
+    linkText = linkText.replace(/\\([\[\]])/g, '$1');
+    const escapeResult = escapeMarkdownLinkText_(linkText);
+    const escapedLinkText = escapeResult.success ? escapeResult.text : linkText;
+    const url = result.substring(urlStart, urlEnd);
+    const newLink = '[' + escapedLinkText + '](' + url + ')';
+    result = result.substring(0, startOfLinkText) + newLink + result.substring(urlEnd + 1);
+    searchStart = startOfLinkText + newLink.length;
+  }
+
+  return result;
+}
+
+/**
+ * Replace markdown links with HTML <a> tags. Link text may contain escaped
+ * brackets (\[ and \]); display text is unescaped for HTML. Issue #66.
+ *
+ * @param {string} markdown - Markdown that may contain [text](url) links
+ * @param {string} linkStyle - Style string for the anchor
+ * @param {boolean} targetBlank - Whether to add target="_blank"
+ * @returns {string} String with links replaced by <a> tags
+ */
+function replaceMarkdownLinksToHtml_(markdown, linkStyle, targetBlank) {
+  if (!markdown || typeof markdown !== 'string') {
+    return markdown;
+  }
+  const targetAttr = targetBlank ? ' target="_blank"' : '';
+  return markdown.replace(/\[((?:\\]|\\[|[^\[\]\\])*?)\]\(([^)]+)\)/g, function(match, rawLinkText, url) {
+    const displayText = rawLinkText.replace(/\\]/g, ']').replace(/\\\[/g, '[');
+    return '<a href="' + url + '" style="' + linkStyle + '"' + targetAttr + '>' + displayText + '</a>';
+  });
 }
 
 // ============================================================================
