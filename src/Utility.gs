@@ -322,7 +322,8 @@ function normalizeMarkdownLinks_(markdown) {
 
 /**
  * Replace markdown links with HTML <a> tags. Link text may contain escaped
- * brackets (\[ and \]); display text is unescaped for HTML. Issue #66.
+ * brackets (\[ and \]); display text is escaped for HTML (Issue #68: preserves
+ * Unicode/emoji, prevents broken markup). Issue #66.
  *
  * @param {string} markdown - Markdown that may contain [text](url) links
  * @param {string} linkStyle - Style string for the anchor
@@ -336,7 +337,9 @@ function replaceMarkdownLinksToHtml_(markdown, linkStyle, targetBlank) {
   const targetAttr = targetBlank ? ' target="_blank"' : '';
   return markdown.replace(/\[((?:\\]|\\[|[^\[\]\\])*?)\]\(([^)]+)\)/g, function(match, rawLinkText, url) {
     const displayText = rawLinkText.replace(/\\]/g, ']').replace(/\\\[/g, '[');
-    return '<a href="' + url + '" style="' + linkStyle + '"' + targetAttr + '>' + displayText + '</a>';
+    const escaped = sanitizeHtmlInput_(displayText);
+    const safeText = escaped.success ? escaped.text : displayText;
+    return '<a href="' + url + '" style="' + linkStyle + '"' + targetAttr + '>' + safeText + '</a>';
   });
 }
 

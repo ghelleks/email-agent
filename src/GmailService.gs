@@ -6,6 +6,7 @@ function findUnprocessed_(max) {
 function minimalize_(threads, bodyChars) {
   return threads.map(function(t) {
     const msg = t.getMessages().pop();
+    // Subject from Gmail is Unicode (emoji, CJK, etc.); preserve when passing downstream (Issue #68)
     const subj = msg.getSubject() || '';
     const from = msg.getFrom() || '';
     const date = msg.getDate();
@@ -449,6 +450,7 @@ function sendFormattedEmail_(to, subject, htmlContent, sourceEmails) {
     }
 
     // Build footer with source email references if provided
+    // Issue #68: Escape subject for HTML to preserve Unicode/emoji and prevent broken markup
     let emailFooter = '';
     if (sourceEmails && sourceEmails.length > 0) {
       emailFooter = '<hr style="margin-top: 2em; border: none; border-top: 1px solid #ccc;">';
@@ -457,7 +459,12 @@ function sendFormattedEmail_(to, subject, htmlContent, sourceEmails) {
 
       sourceEmails.forEach(function(email, index) {
         const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${email.threadId || email.id}`;
-        emailFooter += `${index + 1}. <a href="${gmailUrl}">${email.subject}</a><br>`;
+        const subjectRaw = email.subject || '';
+        const subjectEscaped = (function() {
+          const r = sanitizeHtmlInput_(subjectRaw);
+          return r.success ? r.text : subjectRaw;
+        })();
+        emailFooter += `${index + 1}. <a href="${gmailUrl}">${subjectEscaped}</a><br>`;
       });
 
       emailFooter += '</p>';
