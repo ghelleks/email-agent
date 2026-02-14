@@ -315,7 +315,7 @@ function fetchTemplateAgentKnowledge_(config) {
       maxDocs: maxDocs
     });
 
-    if (knowledgeResult.configured) {
+    if (knowledgeResult.configured && knowledgeResult.knowledge) {
       parts.push(knowledgeResult.knowledge);
       sources.push(...knowledgeResult.metadata.sources);
       totalChars += knowledgeResult.metadata.totalChars;

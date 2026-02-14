@@ -459,12 +459,27 @@ function fetchFolder_(folderIdOrUrl, options) {
     }
   }
 
+  // Empty folder is not an error - just return empty knowledge
   if (docCount === 0) {
-    throw new Error(
-      'No accessible documents found in knowledge folder (ID: ' + folderId + ').\n' +
-      'Folder may be empty or you may lack permission to read documents.\n' +
-      'Configuration property: ' + (options.propertyName || 'unknown')
+    Logger.log(
+      'Knowledge folder is empty or contains no Google Docs (ID: ' + folderId + ').\n' +
+      'Configuration property: ' + (options.propertyName || 'unknown') + '\n' +
+      'Continuing without knowledge from this folder.'
     );
+    
+    return {
+      configured: true,
+      knowledge: null,
+      metadata: {
+        docCount: 0,
+        totalChars: 0,
+        estimatedTokens: 0,
+        modelLimit: 1048576,
+        utilizationPercent: '0.0%',
+        sources: [],
+        warning: 'Folder configured but empty or contains no accessible Google Docs'
+      }
+    };
   }
 
   const combinedKnowledge = knowledgeParts.join('\n');
@@ -579,7 +594,7 @@ function fetchLabelingKnowledge_(config) {
       maxDocs: maxDocs
     });
 
-    if (folderResult.configured) {
+    if (folderResult.configured && folderResult.knowledge) {
       parts.push(folderResult.knowledge);
       sources.push(...folderResult.metadata.sources);
       totalChars += folderResult.metadata.totalChars;
@@ -699,7 +714,7 @@ function fetchReplyKnowledge_(config) {
       maxDocs: maxDocs
     });
 
-    if (knowledgeResult.configured) {
+    if (knowledgeResult.configured && knowledgeResult.knowledge) {
       parts.push(knowledgeResult.knowledge);
       sources.push(...knowledgeResult.metadata.sources);
       totalChars += knowledgeResult.metadata.totalChars;
@@ -819,7 +834,7 @@ function fetchSummarizerKnowledge_(config) {
       maxDocs: maxDocs
     });
 
-    if (knowledgeResult.configured) {
+    if (knowledgeResult.configured && knowledgeResult.knowledge) {
       parts.push(knowledgeResult.knowledge);
       sources.push(...knowledgeResult.metadata.sources);
       totalChars += knowledgeResult.metadata.totalChars;
