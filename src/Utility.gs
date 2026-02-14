@@ -38,11 +38,8 @@ function convertMarkdownToHtml_(markdownText, stylePreset) {
       stylePreset = 'email';
     }
 
-    // Security: Sanitize input to prevent XSS
-    const sanitizeResult = sanitizeHtmlInput_(markdownText);
-    if (!sanitizeResult.success) {
-      return { success: false, error: 'Failed to sanitize input: ' + sanitizeResult.error };
-    }
+    // Note: We do NOT sanitize the entire input here because that would break URLs in markdown links
+    // Instead, we sanitize individual text components as they're converted (headers, bold, italic, link text)
 
     const styleConfig = getMarkdownStyleConfig_(stylePreset);
     if (!styleConfig.success) {
@@ -50,21 +47,41 @@ function convertMarkdownToHtml_(markdownText, stylePreset) {
     }
 
     const styles = styleConfig.styles;
-    let html = sanitizeResult.text;
+    let html = markdownText;
 
     // Normalize markdown links so link text has escaped brackets (Issue #66)
     html = normalizeMarkdownLinks_(html);
 
-    // Convert headers (### Header -> <h3>Header</h3>)
-    html = html.replace(/^### (.+)$/gm, `<h3 style="${styles.h3}">$1</h3>`);
-    html = html.replace(/^## (.+)$/gm, `<h2 style="${styles.h2}">$1</h2>`);
-    html = html.replace(/^# (.+)$/gm, `<h1 style="${styles.h1}">$1</h1>`);
+    // Convert headers (### Header -> <h3>Header</h3>) with sanitization
+    html = html.replace(/^### (.+)$/gm, function(match, headerText) {
+      const sanitized = sanitizeHtmlInput_(headerText);
+      const safeText = sanitized.success ? sanitized.text : headerText;
+      return `<h3 style="${styles.h3}">${safeText}</h3>`;
+    });
+    html = html.replace(/^## (.+)$/gm, function(match, headerText) {
+      const sanitized = sanitizeHtmlInput_(headerText);
+      const safeText = sanitized.success ? sanitized.text : headerText;
+      return `<h2 style="${styles.h2}">${safeText}</h2>`;
+    });
+    html = html.replace(/^# (.+)$/gm, function(match, headerText) {
+      const sanitized = sanitizeHtmlInput_(headerText);
+      const safeText = sanitized.success ? sanitized.text : headerText;
+      return `<h1 style="${styles.h1}">${safeText}</h1>`;
+    });
 
-    // Convert bold text (**text** -> <strong>text</strong>)
-    html = html.replace(/\*\*([^*]+)\*\*/g, `<strong style="${styles.bold}">$1</strong>`);
+    // Convert bold text (**text** -> <strong>text</strong>) with sanitization
+    html = html.replace(/\*\*([^*]+)\*\*/g, function(match, boldText) {
+      const sanitized = sanitizeHtmlInput_(boldText);
+      const safeText = sanitized.success ? sanitized.text : boldText;
+      return `<strong style="${styles.bold}">${safeText}</strong>`;
+    });
 
-    // Convert italic text (*text* -> <em>text</em>)
-    html = html.replace(/\*([^*]+)\*/g, `<em style="${styles.italic}">$1</em>`);
+    // Convert italic text (*text* -> <em>text</em>) with sanitization
+    html = html.replace(/\*([^*]+)\*/g, function(match, italicText) {
+      const sanitized = sanitizeHtmlInput_(italicText);
+      const safeText = sanitized.success ? sanitized.text : italicText;
+      return `<em style="${styles.italic}">${safeText}</em>`;
+    });
 
     // Convert Sources sections to bulleted lists (email style only)
     if (stylePreset === 'email') {
@@ -248,6 +265,39 @@ function escapeMarkdownLinkText_(text) {
 }
 
 /**
+ * Sanitize URL for use in href attribute
+ * Only escapes characters that are dangerous in HTML attributes (quotes)
+ * Preserves URL structure including /, ?, &, =, #, etc.
+ *
+ * @param {string} url - URL to sanitize
+ * @returns {{success: boolean, url?: string, error?: string}} Sanitized URL result
+ */
+function sanitizeUrlForHref_(url) {
+  try {
+    if (!url) {
+      return { success: true, url: '' };
+    }
+
+    if (typeof url !== 'string') {
+      return { success: false, error: 'Input must be a string' };
+    }
+
+    // Only escape quotes and angle brackets which are dangerous in href attributes
+    // Do NOT escape /, &, #, ?, = or other valid URL characters
+    const sanitized = url
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    return { success: true, url: sanitized };
+
+  } catch (error) {
+    return standardErrorHandler_(error, 'sanitizeUrlForHref_');
+  }
+}
+
+/**
  * Normalize markdown so all [link text](url) have escaped brackets in link text.
  * Finds each link by locating ]( and the matching [, then escapes any unescaped
  * [ or ] in the link text. Ensures downstream conversion handles any AI output.
@@ -337,9 +387,14 @@ function replaceMarkdownLinksToHtml_(markdown, linkStyle, targetBlank) {
   const targetAttr = targetBlank ? ' target="_blank"' : '';
   return markdown.replace(/\[((?:\\]|\\[|[^\[\]\\])*?)\]\(([^)]+)\)/g, function(match, rawLinkText, url) {
     const displayText = rawLinkText.replace(/\\]/g, ']').replace(/\\\[/g, '[');
-    const escaped = sanitizeHtmlInput_(displayText);
-    const safeText = escaped.success ? escaped.text : displayText;
-    return '<a href="' + url + '" style="' + linkStyle + '"' + targetAttr + '>' + safeText + '</a>';
+    const escapedText = sanitizeHtmlInput_(displayText);
+    const safeText = escapedText.success ? escapedText.text : displayText;
+    
+    // Sanitize URL for href attribute (only escape quotes and other dangerous chars for attributes)
+    const escapedUrl = sanitizeUrlForHref_(url);
+    const safeUrl = escapedUrl.success ? escapedUrl.url : url;
+    
+    return '<a href="' + safeUrl + '" style="' + linkStyle + '"' + targetAttr + '>' + safeText + '</a>';
   });
 }
 
