@@ -49,9 +49,18 @@ function convertMarkdownToHtml_(markdownText, stylePreset) {
     const styles = styleConfig.styles;
     let html = markdownText;
 
+    // CRITICAL: Convert links FIRST, before any other conversions
+    // This prevents sanitization from breaking URLs in link syntax
+    // Issue: When bold/italic text contains links like **[text](url)**, the sanitization
+    // would break the URL before we could convert the link to HTML
+    
     // Normalize markdown links so link text has escaped brackets (Issue #66)
     html = normalizeMarkdownLinks_(html);
+    
+    // Convert links to HTML NOW, before any sanitization
+    html = replaceMarkdownLinksToHtml_(html, styles.link, stylePreset === 'web');
 
+    // Now convert headers/bold/italic - links are already <a> tags so won't be affected
     // Convert headers (### Header -> <h3>Header</h3>) with sanitization
     html = html.replace(/^### (.+)$/gm, function(match, headerText) {
       const sanitized = sanitizeHtmlInput_(headerText);
@@ -84,19 +93,16 @@ function convertMarkdownToHtml_(markdownText, stylePreset) {
     });
 
     // Convert Sources sections to bulleted lists (email style only)
+    // Note: Links within sources are already converted to <a> tags at this point
     if (stylePreset === 'email') {
       html = html.replace(/\*\*Sources:\*\*\s*(.+)/g, function(match, sourcesList) {
-        const sources = sourcesList.split(/,\s*(?=\[)/);
+        const sources = sourcesList.split(/,\s*(?=<a\s)/); // Split on <a tags since links are already HTML
         const listItems = sources.map(source => {
-          const linkedSource = replaceMarkdownLinksToHtml_(source.trim(), styles.link, false);
-          return `<li style="${styles.listItem}">${linkedSource}</li>`;
+          return `<li style="${styles.listItem}">${source.trim()}</li>`;
         }).join('');
         return `<strong style="${styles.bold}">Sources:</strong><ul style="${styles.list}">${listItems}</ul>`;
       });
     }
-
-    // Convert remaining links ([text](url) -> <a href="url">text</a>); supports escaped brackets in link text (Issue #66)
-    html = replaceMarkdownLinksToHtml_(html, styles.link, stylePreset === 'web');
 
     // Convert bullet lists (simple implementation)
     if (stylePreset === 'web') {
