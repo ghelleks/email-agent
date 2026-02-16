@@ -60,33 +60,61 @@ function convertMarkdownToHtml_(markdownText, stylePreset) {
     // Convert links to HTML NOW, before any sanitization
     html = replaceMarkdownLinksToHtml_(html, styles.link, stylePreset === 'web');
 
-    // Now convert headers/bold/italic - links are already <a> tags so won't be affected
-    // Convert headers (### Header -> <h3>Header</h3>) with sanitization
+    // Now convert headers/bold/italic - links are already <a> tags so won't be affected by sanitization
+    // Convert headers (### Header -> <h3>Header</h3>) with conditional sanitization
     html = html.replace(/^### (.+)$/gm, function(match, headerText) {
+      const hasHtmlTags = /<[^>]+>/.test(headerText);
+      if (hasHtmlTags) {
+        return `<h3 style="${styles.h3}">${headerText}</h3>`;
+      }
       const sanitized = sanitizeHtmlInput_(headerText);
       const safeText = sanitized.success ? sanitized.text : headerText;
       return `<h3 style="${styles.h3}">${safeText}</h3>`;
     });
     html = html.replace(/^## (.+)$/gm, function(match, headerText) {
+      const hasHtmlTags = /<[^>]+>/.test(headerText);
+      if (hasHtmlTags) {
+        return `<h2 style="${styles.h2}">${headerText}</h2>`;
+      }
       const sanitized = sanitizeHtmlInput_(headerText);
       const safeText = sanitized.success ? sanitized.text : headerText;
       return `<h2 style="${styles.h2}">${safeText}</h2>`;
     });
     html = html.replace(/^# (.+)$/gm, function(match, headerText) {
+      const hasHtmlTags = /<[^>]+>/.test(headerText);
+      if (hasHtmlTags) {
+        return `<h1 style="${styles.h1}">${headerText}</h1>`;
+      }
       const sanitized = sanitizeHtmlInput_(headerText);
       const safeText = sanitized.success ? sanitized.text : headerText;
       return `<h1 style="${styles.h1}">${safeText}</h1>`;
     });
 
-    // Convert bold text (**text** -> <strong>text</strong>) with sanitization
+    // Convert bold text (**text** -> <strong>text</strong>) with conditional sanitization
+    // Don't sanitize if the text already contains HTML tags (like <a> from converted links)
     html = html.replace(/\*\*([^*]+)\*\*/g, function(match, boldText) {
+      // Check if text contains HTML tags (already converted links)
+      const hasHtmlTags = /<[^>]+>/.test(boldText);
+      if (hasHtmlTags) {
+        // Already has HTML, don't sanitize or it will escape the tags
+        return `<strong style="${styles.bold}">${boldText}</strong>`;
+      }
+      // No HTML tags, safe to sanitize
       const sanitized = sanitizeHtmlInput_(boldText);
       const safeText = sanitized.success ? sanitized.text : boldText;
       return `<strong style="${styles.bold}">${safeText}</strong>`;
     });
 
-    // Convert italic text (*text* -> <em>text</em>) with sanitization
+    // Convert italic text (*text* -> <em>text</em>) with conditional sanitization
+    // Don't sanitize if the text already contains HTML tags (like <a> from converted links)
     html = html.replace(/\*([^*]+)\*/g, function(match, italicText) {
+      // Check if text contains HTML tags (already converted links)
+      const hasHtmlTags = /<[^>]+>/.test(italicText);
+      if (hasHtmlTags) {
+        // Already has HTML, don't sanitize or it will escape the tags
+        return `<em style="${styles.italic}">${italicText}</em>`;
+      }
+      // No HTML tags, safe to sanitize
       const sanitized = sanitizeHtmlInput_(italicText);
       const safeText = sanitized.success ? sanitized.text : italicText;
       return `<em style="${styles.italic}">${safeText}</em>`;
