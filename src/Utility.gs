@@ -419,7 +419,10 @@ function replaceMarkdownLinksToHtml_(markdown, linkStyle, targetBlank) {
     return markdown;
   }
   const targetAttr = targetBlank ? ' target="_blank"' : '';
-  return markdown.replace(/\[((?:\\]|\\[|[^\[\]\\])*?)\]\(([^)]+)\)/g, function(match, rawLinkText, url) {
+  // Use simpler regex that matches [link text](url) including escaped brackets
+  // Match: [ followed by any chars (including \[ and \]) until unescaped ], then (url)
+  return markdown.replace(/\[([^\]]*(?:\\.[^\]]*)*)\]\(([^)]+)\)/g, function(match, rawLinkText, url) {
+    // Unescape any escaped brackets in the link text
     const displayText = rawLinkText.replace(/\\]/g, ']').replace(/\\\[/g, '[');
     const escapedText = sanitizeHtmlInput_(displayText);
     const safeText = escapedText.success ? escapedText.text : displayText;
