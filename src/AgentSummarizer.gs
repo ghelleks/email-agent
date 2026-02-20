@@ -404,7 +404,7 @@ function deliverSummaryEmail_(summaryText, sourceEmails, labelName) {
         <h2 style="color: #333; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; margin-bottom: 1.5em;">
           Email Summary${labelSuffix} - ${currentDate}
         </h2>
-        <div style="line-height: 1.6; color: #444;">
+        <div style="font-size: 16px; line-height: 1.7; color: #444;">
           ${htmlSummary}
         </div>
         <p style="margin-top: 2em; font-size: 12px; color: #666;">

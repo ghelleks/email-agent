@@ -168,9 +168,9 @@ function getMarkdownStyleConfig_(preset) {
   try {
     const configs = {
       email: {
-        h1: 'color: #2c3e50; margin-top: 1.5em; margin-bottom: 0.5em; font-size: 22px;',
-        h2: 'color: #2c3e50; margin-top: 1.5em; margin-bottom: 0.5em; font-size: 20px;',
-        h3: 'color: #2c3e50; margin-top: 1.5em; margin-bottom: 0.5em; font-size: 18px;',
+        h1: 'color: #2c3e50; margin-top: 1.5em; margin-bottom: 0.5em; font-size: 26px;',
+        h2: 'color: #2c3e50; margin-top: 1.5em; margin-bottom: 0.5em; font-size: 22px;',
+        h3: 'color: #2c3e50; margin-top: 1.5em; margin-bottom: 0.5em; font-size: 19px;',
         bold: 'font-weight: bold;',
         italic: 'font-style: italic;',
         link: 'color: #3498db; text-decoration: none;',
