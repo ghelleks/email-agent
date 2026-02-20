@@ -146,6 +146,7 @@ Configuration uses Apps Script Script Properties accessible via the Apps Script 
 - `DEBUG`: Enables verbose logging
 - `MAX_EMAILS_PER_RUN`: Limits emails processed per execution (default: 10)
 - `BATCH_SIZE`: Number of emails sent to AI in one request (default: 10)
+- `BODY_CHARS`: Max characters of email body included in categorization prompts (default: 600)
 
 #### API Retry and Throttling Configuration
 - `API_MAX_RETRIES`: Maximum retry attempts for quota/rate limit errors (default: 3)
@@ -187,6 +188,7 @@ This dual-hook architecture ensures drafts are created for both newly-classified
 - `REPLY_DRAFTER_KNOWLEDGE_MAX_DOCS`: Maximum documents to fetch from knowledge folder (default: 5, ADR-015)
 - `REPLY_DRAFTER_DEBUG`: Enable detailed logging for the agent (default: false)
 - `REPLY_DRAFTER_DRY_RUN`: Test mode for the agent (default: false)
+- `REPLY_DRAFTER_BODY_CHARS`: Max characters per message body included in reply draft prompts (default: 2000, ~500 tokens/message)
 
 #### Email Summarizer Agent Configuration
 
@@ -198,6 +200,7 @@ This dual-hook architecture ensures drafts are created for both newly-classified
 - `SUMMARIZER_ARCHIVE_ON_LABEL`: Enable/disable immediate archiving when 'summarize' label is applied (default: true)
 - `SUMMARIZER_DEBUG`: Enable detailed logging for the agent (default: false)
 - `SUMMARIZER_DRY_RUN`: Test mode for the agent (default: false)
+- `SUMMARIZER_BODY_CHARS`: Max characters per email body included in summary prompts (default: 800, ~200 tokens/email). Lower to reduce token usage when summarizing large email batches.
 
 **Custom Label Support (Issue #46):**
 - `SUMMARIZER_CUSTOM_LABELS`: Comma-separated list of additional labels to summarize (e.g., "Project1,Init2,Foo")
