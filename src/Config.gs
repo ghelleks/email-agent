@@ -9,7 +9,7 @@ function getConfig_() {
     DEFAULT_FALLBACK_LABEL: p.getProperty('DEFAULT_FALLBACK_LABEL') || 'review',
     MAX_EMAILS_PER_RUN: parseInt(p.getProperty('MAX_EMAILS_PER_RUN') || '10', 10),
     BATCH_SIZE: parseInt(p.getProperty('BATCH_SIZE') || '10', 10),
-    BODY_CHARS: parseInt(p.getProperty('BODY_CHARS') || '1200', 10),
+    BODY_CHARS: parseInt(p.getProperty('BODY_CHARS') || '600', 10),
     DRY_RUN: (p.getProperty('DRY_RUN') || 'false').toLowerCase() === 'true',
     DEBUG: (p.getProperty('DEBUG') || 'false').toLowerCase() === 'true',
     MODEL_PRIMARY: 'gemini-2.5-flash',

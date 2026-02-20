@@ -41,6 +41,10 @@ function getSummarizerConfig_() {
     // Archive behavior
     SUMMARIZER_ARCHIVE_ON_LABEL: (props.getProperty('SUMMARIZER_ARCHIVE_ON_LABEL') || 'true').toLowerCase() === 'true',
 
+    // Token budget: max chars per email body included in the summary prompt (default 1200 ≈ 300 tokens/email)
+    // Lower this (e.g. 600) to significantly reduce tokens when summarizing large email batches
+    SUMMARIZER_BODY_CHARS: parseInt(props.getProperty('SUMMARIZER_BODY_CHARS') || '800', 10),
+
     // Knowledge configuration (ADR-015 semantic naming)
     // INSTRUCTIONS: How to summarize (tone, length, focus areas)
     // KNOWLEDGE: Contextual reference material (examples, patterns, terminology)
@@ -168,7 +172,8 @@ function generateSummaryFromEmails_(emails) {
     // Build configuration for summary generation
     const summaryConfig = {
       emailLinks: emailLinks,
-      includeWebLinks: webLinks
+      includeWebLinks: webLinks,
+      bodyChars: config.SUMMARIZER_BODY_CHARS
     };
 
     // Build prompt with knowledge injection (new: prompt built by agent, not LLMService)
@@ -232,7 +237,7 @@ function buildSummaryPrompt_(emailContents, knowledge, config, globalKnowledge) 
     combinedContent += `From: ${email.from}\n`;
     combinedContent += `Subject: ${email.subject}\n`;
     combinedContent += `Date: ${email.date}\n`;
-    combinedContent += `Content: ${email.body.substring(0, 1200)}\n\n`;
+    combinedContent += `Content: ${email.body.substring(0, config.bodyChars || 1200)}\n\n`;
   }
 
   // Build web links section if provided - these will be included inline by the AI
