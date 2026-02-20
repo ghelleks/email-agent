@@ -78,7 +78,7 @@ function retryWithBackoff_(apiCallFn, maxRetries, operationName) {
   throw lastError;
 }
 
-function categorizeBatch_(prompt, model, projectId, location, apiKey) {
+function categorizeBatch_(prompt, model, projectId, location, apiKey, systemInstruction) {
   const cfg = getConfig_();
 
   // Wrap API call in retry logic
@@ -86,10 +86,15 @@ function categorizeBatch_(prompt, model, projectId, location, apiKey) {
     // Prompt is already built by PromptBuilder - just make the API call
     const payload = { contents: [{ role: 'user', parts: [{ text: prompt }]}] };
 
+    if (systemInstruction) {
+      payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+    }
+
     if (cfg.DEBUG) {
       console.log(JSON.stringify({
         promptSent: {
           promptLength: prompt.length,
+          systemInstructionLength: systemInstruction ? systemInstruction.length : 0,
           model: model,
           promptPreview: prompt.substring(0, 500) + (prompt.length > 500 ? '...' : '')
         }
@@ -197,7 +202,7 @@ function extractFirstJson_(txt) {
  *
  * Returns: { success: boolean, summary: string, error?: string }
  */
-function generateConsolidatedSummary_(prompt, config) {
+function generateConsolidatedSummary_(prompt, config, systemInstruction) {
   try {
     if (!prompt || typeof prompt !== 'string') {
       return {
@@ -224,9 +229,13 @@ function generateConsolidatedSummary_(prompt, config) {
         }]
       };
 
+      if (systemInstruction) {
+        payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+      }
+
       // Debug logging following existing pattern
       if (cfg.DEBUG) {
-        Logger.log(`LLMService.generateConsolidatedSummary_: Prompt length: ${prompt.length} chars`);
+        Logger.log(`LLMService.generateConsolidatedSummary_: Prompt length: ${prompt.length} chars, systemInstruction length: ${systemInstruction ? systemInstruction.length : 0} chars`);
       }
 
       // Choose API endpoint based on available credentials (following existing pattern)
@@ -315,7 +324,7 @@ function generateConsolidatedSummary_(prompt, config) {
  * @returns {string} Draft reply text
  * @throws {Error} If API call fails
  */
-function generateReplyDraft_(prompt, model, projectId, location, apiKey) {
+function generateReplyDraft_(prompt, model, projectId, location, apiKey, systemInstruction) {
   const cfg = getConfig_();
 
   // Wrap API call in retry logic
@@ -327,6 +336,10 @@ function generateReplyDraft_(prompt, model, projectId, location, apiKey) {
         parts: [{ text: prompt }]
       }]
     };
+
+    if (systemInstruction) {
+      payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+    }
 
     // Choose endpoint based on authentication
     const useApiKey = !!apiKey;
