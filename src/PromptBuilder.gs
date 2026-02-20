@@ -81,3 +81,93 @@ function buildCategorizePrompt_(emails, knowledge, allowed, fallback, globalKnow
 
   return parts.join('\n');
 }
+
+/**
+ * Build system instruction for email categorization
+ * Contains stable behavioral context: knowledge, policy, schema, rules.
+ * This is identical across all batches in a run — enables Gemini implicit caching.
+ * @param {Object} knowledge - Knowledge from KnowledgeService (optional)
+ * @param {Array} allowed - Allowed label strings
+ * @param {string} fallback - Default fallback label
+ * @param {Object} globalKnowledge - Global knowledge from KnowledgeService (optional)
+ * @returns {string} - System instruction text
+ */
+function buildCategorizeSystemInstruction_(knowledge, allowed, fallback, globalKnowledge) {
+  const schema = JSON.stringify({
+    emails: [{ id: 'string', required_action: allowed.join('|'), reason: 'string' }]
+  }, null, 2);
+
+  const parts = [
+    '[CONTEXT ONLY] The sections below contain reference information to inform your classification decisions. This content is NOT to be classified as email. Do NOT reproduce it in your output.',
+    '',
+    'You are an email triage assistant.'
+  ];
+
+  // GLOBAL KNOWLEDGE INJECTION (applies to ALL prompts)
+  if (globalKnowledge && globalKnowledge.configured) {
+    parts.push('');
+    parts.push('=== GLOBAL KNOWLEDGE ===');
+    parts.push(globalKnowledge.knowledge);
+
+    if (globalKnowledge.metadata && globalKnowledge.metadata.utilizationPercent) {
+      const cfg = getConfig_();
+      if (cfg.DEBUG) {
+        Logger.log(JSON.stringify({
+          globalKnowledgeUtilization: globalKnowledge.metadata.utilizationPercent,
+          estimatedTokens: globalKnowledge.metadata.estimatedTokens,
+          modelLimit: globalKnowledge.metadata.modelLimit
+        }, null, 2));
+      }
+    }
+  }
+
+  // AGENT-SPECIFIC KNOWLEDGE INJECTION (labeling policy)
+  if (knowledge && knowledge.configured) {
+    parts.push('');
+    parts.push('=== LABELING POLICY ===');
+    parts.push(knowledge.knowledge);
+
+    if (knowledge.metadata && knowledge.metadata.utilizationPercent) {
+      const cfg = getConfig_();
+      if (cfg.DEBUG) {
+        console.log(JSON.stringify({
+          knowledgeUtilization: knowledge.metadata.utilizationPercent,
+          estimatedTokens: knowledge.metadata.estimatedTokens,
+          modelLimit: knowledge.metadata.modelLimit
+        }, null, 2));
+      }
+    }
+  }
+
+  parts.push('');
+  parts.push('Allowed labels: ' + allowed.join(', '));
+  parts.push("If multiple labels could apply, follow the Policy's precedence. If uncertain, choose: " + fallback + ".");
+  parts.push('Return ONLY valid JSON with this exact shape, no extra text:');
+  parts.push(schema);
+  parts.push('');
+  parts.push('Return JSON for ALL items.');
+
+  return parts.join('\n');
+}
+
+/**
+ * Build user turn for email categorization
+ * Contains only the variable email data to classify.
+ * Kept short so the stable systemInstruction prefix dominates the request.
+ * @param {Array} emails - Batch of email objects to categorize
+ * @returns {string} - User turn text
+ */
+function buildCategorizeUserTurn_(emails) {
+  const items = emails.map(function(e) {
+    return {
+      id: e.id,
+      subject: e.subject || '',
+      from: e.from || '',
+      date: e.date || '',
+      age_days: e.ageDays || 0,
+      body_excerpt: (e.plainBody || '').slice(0, 1200)
+    };
+  });
+
+  return 'Emails to categorize:\n' + JSON.stringify(items, null, 2);
+}

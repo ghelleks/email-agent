@@ -5,16 +5,19 @@ function categorizeWithGemini_(emails, knowledge, cfg, globalKnowledge) {
     batches.push(emails.slice(i, i + cfg.BATCH_SIZE));
   }
 
+  // Build systemInstruction once — identical for every batch, enables implicit caching
+  const systemInstruction = buildCategorizeSystemInstruction_(knowledge,
+    ['reply_needed', 'review', 'todo', 'summarize'],
+    cfg.DEFAULT_FALLBACK_LABEL, globalKnowledge);
+
   const results = [];
   for (const batch of batches) {
-    // Build prompt using PromptBuilder (enforces separation of concerns)
-    const prompt = buildCategorizePrompt_(batch, knowledge,
-      ['reply_needed', 'review', 'todo', 'summarize'],
-      cfg.DEFAULT_FALLBACK_LABEL, globalKnowledge);
+    // User turn contains only the variable email data
+    const userTurn = buildCategorizeUserTurn_(batch);
 
-    // LLMService now receives complete prompt (no longer builds it internally)
-    const out = categorizeBatch_(prompt, cfg.MODEL_PRIMARY, cfg.PROJECT_ID,
-      cfg.LOCATION, cfg.GEMINI_API_KEY);
+    // LLMService now receives user turn + system instruction separately
+    const out = categorizeBatch_(userTurn, cfg.MODEL_PRIMARY, cfg.PROJECT_ID,
+      cfg.LOCATION, cfg.GEMINI_API_KEY, systemInstruction);
     if (cfg.DEBUG) {
       console.log(JSON.stringify({ batchSize: batch.length, llmRaw: out }, null, 2));
     }

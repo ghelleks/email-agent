@@ -41,6 +41,9 @@ function getReplyDrafterConfig_() {
     REPLY_DRAFTER_KNOWLEDGE_FOLDER_URL: props.getProperty('REPLY_DRAFTER_KNOWLEDGE_FOLDER_URL'),
     REPLY_DRAFTER_KNOWLEDGE_MAX_DOCS: parseInt(props.getProperty('REPLY_DRAFTER_KNOWLEDGE_MAX_DOCS') || '5', 10),
 
+    // Token budget: max chars per message body included in the prompt (default 2000 ≈ 500 tokens/message)
+    REPLY_DRAFTER_BODY_CHARS: parseInt(props.getProperty('REPLY_DRAFTER_BODY_CHARS') || '2000', 10),
+
     // Debugging and testing
     REPLY_DRAFTER_DEBUG: (props.getProperty('REPLY_DRAFTER_DEBUG') || 'false').toLowerCase() === 'true',
     REPLY_DRAFTER_DRY_RUN: (props.getProperty('REPLY_DRAFTER_DRY_RUN') || 'false').toLowerCase() === 'true'
@@ -169,12 +172,15 @@ function createDraftReply_(threadId, draftText) {
  * Format email thread for inclusion in prompt
  * @private
  * @param {Object} emailThread - Thread object with messages array
+ * @param {number} [bodyChars=2000] - Max characters per message body (controls token spend)
  * @returns {string} - Formatted email thread
  */
-function formatEmailThread_(emailThread) {
+function formatEmailThread_(emailThread, bodyChars) {
   if (!emailThread || !emailThread.messages || emailThread.messages.length === 0) {
     return 'No email thread available.';
   }
+
+  const limit = bodyChars || 2000;
 
   return emailThread.messages.map(function(msg, idx) {
     const parts = [];
@@ -184,7 +190,7 @@ function formatEmailThread_(emailThread) {
     parts.push('Date: ' + (msg.date || 'Unknown'));
     parts.push('Subject: ' + (msg.subject || '(No subject)'));
     parts.push('');
-    parts.push(msg.body || '(No content)');
+    parts.push((msg.body || '(No content)').slice(0, limit));
     return parts.join('\n');
   }).join('\n\n');
 }
@@ -195,10 +201,30 @@ function formatEmailThread_(emailThread) {
  * @param {Object} emailThread - Thread object with messages array
  * @param {Object} knowledge - Knowledge object from KnowledgeService (optional)
  * @param {Object} globalKnowledge - Global knowledge object from KnowledgeService (optional)
+ * @param {number} [bodyChars=2000] - Max chars per message body (controls token spend)
  * @returns {string} - Complete prompt for reply generation
  */
-function buildReplyDraftPrompt_(emailThread, knowledge, globalKnowledge) {
-  const parts = ['You are drafting a professional email reply.'];
+function buildReplyDraftPrompt_(emailThread, knowledge, globalKnowledge, bodyChars) {
+  // Assembly function: combines system instruction and user turn for backward compatibility
+  const systemInstruction = buildReplyDraftSystemInstruction_(knowledge, globalKnowledge);
+  const userTurn = buildReplyDraftUserTurn_(emailThread, bodyChars);
+  return systemInstruction + '\n\n' + userTurn;
+}
+
+/**
+ * Build system instruction for reply drafting
+ * Contains stable behavioral context: global knowledge, drafting instructions, format rules.
+ * Identical across all threads in a run — enables Gemini implicit caching.
+ * @param {Object} knowledge - Knowledge from KnowledgeService (optional)
+ * @param {Object} globalKnowledge - Global knowledge from KnowledgeService (optional)
+ * @returns {string} - System instruction text
+ */
+function buildReplyDraftSystemInstruction_(knowledge, globalKnowledge) {
+  const parts = [
+    '[CONTEXT ONLY] The sections below describe HOW to write replies. They are NOT an email thread to respond to. Do NOT treat GLOBAL KNOWLEDGE or DRAFTING INSTRUCTIONS as content requiring a reply.',
+    '',
+    'You are drafting a professional email reply.'
+  ];
 
   // GLOBAL KNOWLEDGE INJECTION (applies to ALL prompts)
   if (globalKnowledge && globalKnowledge.configured) {
@@ -206,7 +232,6 @@ function buildReplyDraftPrompt_(emailThread, knowledge, globalKnowledge) {
     parts.push('=== GLOBAL KNOWLEDGE ===');
     parts.push(globalKnowledge.knowledge);
 
-    // Token utilization logging (when REPLY_DRAFTER_DEBUG or DEBUG enabled)
     if (globalKnowledge.metadata && globalKnowledge.metadata.utilizationPercent) {
       const cfg = getConfig_();
       if (cfg.DEBUG || cfg.REPLY_DRAFTER_DEBUG) {
@@ -238,7 +263,6 @@ function buildReplyDraftPrompt_(emailThread, knowledge, globalKnowledge) {
       parts.push('Context sources: ' + sourceNames.join(', '));
     }
 
-    // Token utilization logging (when REPLY_DRAFTER_DEBUG enabled)
     if (knowledge.metadata && knowledge.metadata.utilizationPercent) {
       const cfg = getConfig_();
       if (cfg.REPLY_DRAFTER_DEBUG) {
@@ -262,12 +286,6 @@ function buildReplyDraftPrompt_(emailThread, knowledge, globalKnowledge) {
   }
 
   parts.push('');
-  parts.push('=== EMAIL THREAD ===');
-  parts.push(formatEmailThread_(emailThread));
-  parts.push('');
-  parts.push('=== REPLY INSTRUCTIONS ===');
-  parts.push('Draft a professional reply that addresses all points raised in the most recent email.');
-  parts.push('');
   parts.push('IMPORTANT FORMAT REQUIREMENTS:');
   parts.push('- Return ONLY the email body text (no subject line, no "Subject:", no headers)');
   parts.push('- Start directly with the greeting or body content');
@@ -275,6 +293,25 @@ function buildReplyDraftPrompt_(emailThread, knowledge, globalKnowledge) {
   parts.push('- Sign the email with the user\'s name if provided in the drafting instructions');
   parts.push('- If the user\'s name is not clear from the instructions, use "[Your name here]" as the signature');
   parts.push('- Do NOT include any preamble, explanation, or meta-commentary');
+
+  return parts.join('\n');
+}
+
+/**
+ * Build user turn for reply drafting
+ * Contains only the variable per-thread data: the email thread + task directive.
+ * @param {Object} emailThread - Thread object with messages array
+ * @param {number} [bodyChars=2000] - Max chars per message body
+ * @returns {string} - User turn text
+ */
+function buildReplyDraftUserTurn_(emailThread, bodyChars) {
+  const parts = [
+    '=== EMAIL THREAD ===',
+    formatEmailThread_(emailThread, bodyChars),
+    '',
+    '=== REPLY INSTRUCTIONS ===',
+    'Draft a professional reply that addresses all points raised in the most recent email.'
+  ];
 
   return parts.join('\n');
 }
@@ -369,13 +406,15 @@ function processReplyNeeded_(ctx) {
       return { status: 'error', info: 'global knowledge fetch failed: ' + globalKnowledgeError.toString() };
     }
 
-    // Build prompt via PromptBuilder
-    let prompt;
+    // Build system instruction (stable) + user turn (thread-specific)
+    let systemInstruction;
+    let userTurn;
     try {
-      prompt = buildReplyDraftPrompt_(emailThread, knowledge, globalKnowledge);
+      systemInstruction = buildReplyDraftSystemInstruction_(knowledge, globalKnowledge);
+      userTurn = buildReplyDraftUserTurn_(emailThread, config.REPLY_DRAFTER_BODY_CHARS);
 
       if (config.REPLY_DRAFTER_DEBUG) {
-        ctx.log('Built prompt: ' + prompt.length + ' characters');
+        ctx.log('Built systemInstruction: ' + systemInstruction.length + ' chars, userTurn: ' + userTurn.length + ' chars');
       }
     } catch (promptError) {
       ctx.log('Failed to build prompt: ' + promptError.toString());
@@ -387,11 +426,12 @@ function processReplyNeeded_(ctx) {
     try {
       const cfg = getConfig_();
       draftText = generateReplyDraft_(
-        prompt,
+        userTurn,
         cfg.MODEL_PRIMARY,
         cfg.PROJECT_ID,
         cfg.LOCATION,
-        cfg.GEMINI_API_KEY
+        cfg.GEMINI_API_KEY,
+        systemInstruction
       );
 
       if (config.REPLY_DRAFTER_DEBUG) {
@@ -463,6 +503,39 @@ function replyDrafterPostLabelScan_() {
       Logger.log(`Reply Drafter postLabel: Found ${threads.length} emails with reply_needed label`);
     }
 
+    // Fetch knowledge once before the loop — these are the same for every thread
+    const cfg = getConfig_();
+    const knowledge = fetchReplyKnowledge_({
+      instructionsUrl: config.REPLY_DRAFTER_INSTRUCTIONS_URL,
+      knowledgeFolderUrl: config.REPLY_DRAFTER_KNOWLEDGE_FOLDER_URL,
+      maxDocs: config.REPLY_DRAFTER_KNOWLEDGE_MAX_DOCS
+    });
+    const globalKnowledge = fetchGlobalKnowledge_();
+
+    if (config.REPLY_DRAFTER_DEBUG) {
+      const hasInstructions = !!config.REPLY_DRAFTER_INSTRUCTIONS_URL;
+      const hasFolder = !!config.REPLY_DRAFTER_KNOWLEDGE_FOLDER_URL;
+      Logger.log('Reply Drafter postLabel: Knowledge configuration: instructions=' + hasInstructions + ', folder=' + hasFolder);
+      if (knowledge.configured) {
+        Logger.log('Reply Drafter postLabel: ✓ Loaded ' + knowledge.metadata.docCount + ' documents (' +
+                    knowledge.metadata.utilizationPercent + ' utilization)');
+      } else {
+        Logger.log('Reply Drafter postLabel: ℹ No knowledge configured - using basic drafting instructions');
+      }
+      if (globalKnowledge.configured) {
+        Logger.log('Reply Drafter postLabel: ✓ Loaded global knowledge: ' + globalKnowledge.metadata.docCount + ' documents (' +
+                    globalKnowledge.metadata.utilizationPercent + ' utilization)');
+      }
+    }
+
+    const model = cfg.MODEL_PRIMARY;
+    const projectId = cfg.PROJECT_ID;
+    const location = cfg.LOCATION;
+    const apiKey = cfg.GEMINI_API_KEY;
+
+    // Build systemInstruction once — byte-for-byte identical for every thread, maximizes cache hits
+    const systemInstruction = buildReplyDraftSystemInstruction_(knowledge, globalKnowledge);
+
     let processed = 0;
     let skipped = 0;
     let errors = 0;
@@ -489,47 +562,8 @@ function replyDrafterPostLabelScan_() {
           continue;
         }
 
-        // Fetch knowledge if configured
-        if (config.REPLY_DRAFTER_DEBUG && i === 0) {
-          // Log knowledge config once at start
-          const hasInstructions = !!config.REPLY_DRAFTER_INSTRUCTIONS_URL;
-          const hasFolder = !!config.REPLY_DRAFTER_KNOWLEDGE_FOLDER_URL;
-          Logger.log('Reply Drafter postLabel: Knowledge configuration: instructions=' + hasInstructions + ', folder=' + hasFolder);
-        }
-
-        const knowledge = fetchReplyKnowledge_({
-          instructionsUrl: config.REPLY_DRAFTER_INSTRUCTIONS_URL,
-          knowledgeFolderUrl: config.REPLY_DRAFTER_KNOWLEDGE_FOLDER_URL,
-          maxDocs: config.REPLY_DRAFTER_KNOWLEDGE_MAX_DOCS
-        });
-
-        if (config.REPLY_DRAFTER_DEBUG && i === 0) {
-          // Log knowledge load result once at start
-          if (knowledge.configured) {
-            Logger.log('Reply Drafter postLabel: ✓ Loaded ' + knowledge.metadata.docCount + ' documents (' +
-                        knowledge.metadata.utilizationPercent + ' utilization)');
-          } else {
-            Logger.log('Reply Drafter postLabel: ℹ No knowledge configured - using basic drafting instructions');
-          }
-        }
-
-        // Get AI configuration
-        const cfg = getConfig_();
-
-        // Fetch global knowledge (shared across all AI operations)
-        const globalKnowledge = fetchGlobalKnowledge_();
-
-        if (config.REPLY_DRAFTER_DEBUG && i === 0 && globalKnowledge.configured) {
-          Logger.log('Reply Drafter postLabel: ✓ Loaded global knowledge: ' + globalKnowledge.metadata.docCount + ' documents (' +
-                      globalKnowledge.metadata.utilizationPercent + ' utilization)');
-        }
-
-        // Build AI prompt
-        const prompt = buildReplyDraftPrompt_(threadData, knowledge, globalKnowledge);
-        const model = cfg.GEMINI_MODEL || 'gemini-2.0-flash-exp';
-        const projectId = cfg.PROJECT_ID;
-        const location = cfg.VERTEX_LOCATION || 'us-central1';
-        const apiKey = cfg.GEMINI_API_KEY;
+        // Build user turn per thread (only thread content varies — systemInstruction is reused)
+        const userTurn = buildReplyDraftUserTurn_(threadData, config.REPLY_DRAFTER_BODY_CHARS);
 
         // Generate reply draft
         let draftText;
@@ -537,7 +571,7 @@ function replyDrafterPostLabelScan_() {
           Logger.log(`Reply Drafter postLabel: DRY RUN - Would generate draft for thread ${threadId}`);
           draftText = '[DRY RUN] Draft would be generated here';
         } else {
-          draftText = generateReplyDraft_(prompt, model, projectId, location, apiKey);
+          draftText = generateReplyDraft_(userTurn, model, projectId, location, apiKey, systemInstruction);
         }
 
         // Create Gmail draft
