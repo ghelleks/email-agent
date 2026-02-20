@@ -237,11 +237,11 @@ This dual-hook architecture ensures todos are forwarded for both newly-classifie
 - `TODO_FORWARDER_DEBUG`: Enable detailed logging for the agent (default: false)
 - `TODO_FORWARDER_DRY_RUN`: Test mode for the agent (default: false)
 
-**Archive-Based Idempotency:**
-- Successfully forwarded emails are **automatically archived** (with `todo` label preserved)
-- Failed forwards remain **in inbox** for automatic retry on next hourly run
-- Only processes emails with `todo` label that are **IN THE INBOX**
-- No additional labels needed - archive status indicates "already forwarded"
+**Label-Based Idempotency:**
+- Successfully forwarded emails receive the **`todo-forwarded` label** and remain in inbox
+- Failed forwards remain **in inbox** without `todo-forwarded` label for automatic retry on next hourly run
+- Only processes emails with `todo` label **without** the `todo-forwarded` label that are **IN THE INBOX**
+- Users can manually archive todo emails after acting on them
 
 #### KnowledgeService Configuration
 The KnowledgeService provides unified knowledge management for AI prompts by fetching Google Drive documents.
@@ -831,10 +831,10 @@ Refer to `docs/adr/` for complete context:
 - **Solution**: For manually labeled emails, postLabel hook will process them on next hourly run
 
 **🔍 Problem**: Todo Forwarder forwarding duplicate emails
-- **Solution**: Check if emails are archived after forwarding (archived emails won't be forwarded again)
-- **Solution**: Verify archive operation succeeded (check execution logs)
+- **Solution**: Check if emails have `todo-forwarded` label (labeled emails won't be forwarded again)
+- **Solution**: Verify label was applied after forwarding (check execution logs)
 - **Solution**: Review execution logs for idempotency checks
-- **Solution**: Emails in inbox with `todo` label will be forwarded - move to archive to prevent retry
+- **Solution**: Emails in inbox with `todo` label but without `todo-forwarded` label will be forwarded again
 
 **🔍 Problem**: Todo Forwarder destination not receiving emails
 - **Solution**: Verify `TODO_FORWARDER_EMAIL` is correct email address format
