@@ -432,7 +432,8 @@ The KnowledgeService provides centralized knowledge management for AI-powered fe
 
 **Fail-Fast Error Handling:**
 - If knowledge not configured: gracefully proceed without it
-- If knowledge configured but inaccessible: throw actionable error with remediation steps
+- If knowledge configured but inaccessible (permissions, not found): throw actionable error with remediation steps
+- If knowledge configured but folder is empty (no Google Docs): log a warning and proceed without knowledge from that folder — processing is not interrupted
 - No silent fallbacks - explicit configuration means explicit intent
 
 **Token Transparency:**
